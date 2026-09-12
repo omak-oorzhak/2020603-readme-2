@@ -5,6 +5,7 @@ import { FileStorageClient } from '../clients/file-storage.client';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
 import { ChangeUserPasswordDto } from './dto/change-user-password.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { UserRdo } from './rdo/user.rdo';
 import { LoggedUserRdo } from './rdo/logged-user.rdo';
 
@@ -38,6 +39,11 @@ export class AuthService {
 
   public async login(dto: LoginUserDto): Promise<LoggedUserRdo> {
     const result = await this.usersClient.login(dto);
+    return fillRdo(LoggedUserRdo, result);
+  }
+
+  public async refresh(dto: RefreshTokenDto): Promise<LoggedUserRdo> {
+    const result = await this.usersClient.refresh(dto);
     return fillRdo(LoggedUserRdo, result);
   }
 

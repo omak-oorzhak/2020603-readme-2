@@ -45,6 +45,8 @@ import { PostIdParamDto } from './dto/post-id-param.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { PostWithAuthorRdo } from './rdo/post-with-author.rdo';
 import { JwtAuthGuard } from '../common/jwt-auth.guard';
+import { CurrentUser } from '../common/current-user.decorator';
+import { OptionalJwtAuthGuard } from '../common/optional-jwt-auth.guard';
 import { ApiPaginatedResponse } from '../common/api-paginated-response.decorator';
 import {
   IMAGE_MIME_TYPE_PATTERN,
@@ -83,8 +85,11 @@ export class PostsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Получить ленту текущего пользователя' })
   @ApiPaginatedResponse(PostWithAuthorRdo, 'Постраничная лента текущего пользователя')
-  public async feed(@Query() query: GetPostQueryDto) {
-    return this.postsService.findFeed(query);
+  public async feed(
+    @CurrentUser('sub') userId: string,
+    @Query() query: GetPostQueryDto,
+  ) {
+    return this.postsService.findFeed(userId, query);
   }
 
   @Get('drafts')
@@ -95,8 +100,11 @@ export class PostsController {
     PostWithAuthorRdo,
     'Постраничный список черновиков текущего пользователя',
   )
-  public async drafts(@Query() query: GetPostQueryDto) {
-    return this.postsService.findDrafts(query);
+  public async drafts(
+    @CurrentUser('sub') userId: string,
+    @Query() query: GetPostQueryDto,
+  ) {
+    return this.postsService.findDrafts(userId, query);
   }
 
   @Get('search')
@@ -109,12 +117,20 @@ export class PostsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Получить публикацию по ID (с обогащением автора)' })
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Получить публикацию по ID (с обогащением автора). Токен необязателен: с ним автор видит и свой черновик',
+  })
   @ApiParam({ name: 'id', description: 'Идентификатор публикации', format: 'uuid' })
   @ApiOkResponse({ description: 'Публикация найдена', type: PostWithAuthorRdo })
   @ApiNotFoundResponse({ description: 'Публикация не найдена' })
-  public async show(@Param() params: PostIdParamDto) {
-    return this.postsService.findOne(params.id);
+  public async show(
+    @Param() params: PostIdParamDto,
+    @CurrentUser('sub') userId?: string,
+  ) {
+    return this.postsService.findOne(params.id, userId);
   }
 
   @Post('video')
@@ -123,8 +139,11 @@ export class PostsController {
   @ApiOperation({ summary: 'Создать публикацию типа «Видео»' })
   @ApiCreatedResponse({ description: 'Публикация создана', type: PostWithAuthorRdo })
   @ApiBadRequestResponse({ description: 'Невалидные данные публикации' })
-  public async createVideo(@Body() dto: CreateVideoPostDto) {
-    return this.postsService.createVideo(dto);
+  public async createVideo(
+    @CurrentUser('sub') userId: string,
+    @Body() dto: CreateVideoPostDto,
+  ) {
+    return this.postsService.createVideo(userId, dto);
   }
 
   @Post('text')
@@ -133,8 +152,11 @@ export class PostsController {
   @ApiOperation({ summary: 'Создать публикацию типа «Текст»' })
   @ApiCreatedResponse({ description: 'Публикация создана', type: PostWithAuthorRdo })
   @ApiBadRequestResponse({ description: 'Невалидные данные публикации' })
-  public async createText(@Body() dto: CreateTextPostDto) {
-    return this.postsService.createText(dto);
+  public async createText(
+    @CurrentUser('sub') userId: string,
+    @Body() dto: CreateTextPostDto,
+  ) {
+    return this.postsService.createText(userId, dto);
   }
 
   @Post('quote')
@@ -143,8 +165,11 @@ export class PostsController {
   @ApiOperation({ summary: 'Создать публикацию типа «Цитата»' })
   @ApiCreatedResponse({ description: 'Публикация создана', type: PostWithAuthorRdo })
   @ApiBadRequestResponse({ description: 'Невалидные данные публикации' })
-  public async createQuote(@Body() dto: CreateQuotePostDto) {
-    return this.postsService.createQuote(dto);
+  public async createQuote(
+    @CurrentUser('sub') userId: string,
+    @Body() dto: CreateQuotePostDto,
+  ) {
+    return this.postsService.createQuote(userId, dto);
   }
 
   @Post('photo')
@@ -157,6 +182,7 @@ export class PostsController {
   @ApiCreatedResponse({ description: 'Публикация создана', type: PostWithAuthorRdo })
   @ApiBadRequestResponse({ description: 'Невалидный файл или данные публикации' })
   public async createPhoto(
+    @CurrentUser('sub') userId: string,
     @Body() dto: CreatePhotoPostDto,
     @UploadedFile(
       new ParseFilePipe({
@@ -168,7 +194,7 @@ export class PostsController {
     )
     file: Express.Multer.File,
   ) {
-    return this.postsService.createPhoto(dto, file);
+    return this.postsService.createPhoto(userId, dto, file);
   }
 
   @Post('link')
@@ -177,8 +203,11 @@ export class PostsController {
   @ApiOperation({ summary: 'Создать публикацию типа «Ссылка»' })
   @ApiCreatedResponse({ description: 'Публикация создана', type: PostWithAuthorRdo })
   @ApiBadRequestResponse({ description: 'Невалидные данные публикации' })
-  public async createLink(@Body() dto: CreateLinkPostDto) {
-    return this.postsService.createLink(dto);
+  public async createLink(
+    @CurrentUser('sub') userId: string,
+    @Body() dto: CreateLinkPostDto,
+  ) {
+    return this.postsService.createLink(userId, dto);
   }
 
   @Patch(':id')
@@ -192,9 +221,10 @@ export class PostsController {
   @ApiNotFoundResponse({ description: 'Публикация не найдена' })
   public async update(
     @Param() params: PostIdParamDto,
+    @CurrentUser('sub') userId: string,
     @Body() dto: UpdatePostDto,
   ) {
-    return this.postsService.update(params.id, dto);
+    return this.postsService.update(userId, params.id, dto);
   }
 
   @Delete(':id')
@@ -206,8 +236,11 @@ export class PostsController {
   @ApiNoContentResponse({ description: 'Публикация удалена' })
   @ApiForbiddenResponse({ description: 'Удалять можно только свои публикации' })
   @ApiNotFoundResponse({ description: 'Публикация не найдена' })
-  public async destroy(@Param() params: PostIdParamDto) {
-    await this.postsService.delete(params.id);
+  public async destroy(
+    @Param() params: PostIdParamDto,
+    @CurrentUser('sub') userId: string,
+  ) {
+    await this.postsService.delete(userId, params.id);
   }
 
   @Post(':id/repost')
@@ -217,8 +250,11 @@ export class PostsController {
   @ApiParam({ name: 'id', description: 'Идентификатор публикации', format: 'uuid' })
   @ApiCreatedResponse({ description: 'Репост создан', type: PostWithAuthorRdo })
   @ApiNotFoundResponse({ description: 'Публикация не найдена' })
-  @ApiConflictResponse({ description: 'Репост уже был сделан ранее' })
-  public async repost(@Param() params: PostIdParamDto) {
-    return this.postsService.repost(params.id);
+  @ApiConflictResponse({ description: 'Репост уже был сделан ранее или это своя публикация' })
+  public async repost(
+    @Param() params: PostIdParamDto,
+    @CurrentUser('sub') userId: string,
+  ) {
+    return this.postsService.repost(userId, params.id);
   }
 }

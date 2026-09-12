@@ -21,3 +21,9 @@ export class InvalidPasswordError extends AuthenticationFailedError {
     super('Неверный пароль');
   }
 }
+
+export class InvalidRefreshTokenError extends AuthenticationFailedError {
+  constructor() {
+    super('Недействительный refresh-токен');
+  }
+}

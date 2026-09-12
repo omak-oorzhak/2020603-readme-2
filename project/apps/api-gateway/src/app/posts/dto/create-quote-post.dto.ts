@@ -4,9 +4,15 @@ import {
   IsArray,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
+import {
+  MAX_TAGS_COUNT,
+  TAG_PATTERN,
+  TAG_VALIDATION_MESSAGE,
+} from '../posts.constant';
 
 export class CreateQuotePostDto {
   @ApiProperty({ example: 'Любая достаточно продвинутая технология неотличима от магии', description: '20–300 символов' })
@@ -25,6 +31,7 @@ export class CreateQuotePostDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  @ArrayMaxSize(8)
+  @ArrayMaxSize(MAX_TAGS_COUNT)
+  @Matches(TAG_PATTERN, { each: true, message: TAG_VALIDATION_MESSAGE })
   public tags?: string[];
 }

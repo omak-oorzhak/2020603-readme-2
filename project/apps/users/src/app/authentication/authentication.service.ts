@@ -5,11 +5,13 @@ import { User, type TokenPayload } from '@project/shared-types';
 import { UserRepository } from '../user/user.repository';
 import { jwtConfig } from '../config';
 import { PasswordHasher } from './password.hasher';
+import { NotifyClientService } from '../notify-client/notify-client.service';
 import type { CreateUserDto } from './dto/create-user.dto';
 import type { LoginUserDto } from './dto/login-user.dto';
 import type { ChangeUserPasswordDto } from './dto/change-user-password.dto';
 import {
   InvalidPasswordError,
+  InvalidRefreshTokenError,
   UserAlreadyExistsError,
   UserNotFoundError,
 } from './authentication.errors';
@@ -27,6 +29,7 @@ export class AuthenticationService {
     private readonly jwtService: JwtService,
     @Inject(jwtConfig.KEY)
     private readonly tokenConfig: ConfigType<typeof jwtConfig>,
+    private readonly notifyClient: NotifyClientService,
   ) {}
 
   public async register(dto: CreateUserDto): Promise<User> {
@@ -37,12 +40,17 @@ export class AuthenticationService {
 
     const passwordHash = await this.passwordHasher.hash(dto.password);
 
-    return this.userRepository.create({
+    const user = await this.userRepository.create({
       email: dto.email,
       name: dto.name,
       avatarUrl: dto.avatarUrl,
       passwordHash,
     });
+
+    // §7.2: новый пользователь сразу становится получателем рассылки.
+    this.notifyClient.publishNewSubscriber(user);
+
+    return user;
   }
 
   public async verifyUser(dto: LoginUserDto): Promise<User> {
@@ -81,6 +89,21 @@ export class AuthenticationService {
     ]);
 
     return { accessToken, refreshToken };
+  }
+
+  /** Обменивает refresh-токен на новую пару токенов. */
+  public async verifyRefreshToken(refreshToken: string): Promise<User> {
+    let payload: TokenPayload;
+
+    try {
+      payload = await this.jwtService.verifyAsync<TokenPayload>(refreshToken, {
+        secret: this.tokenConfig.refreshTokenSecret,
+      });
+    } catch {
+      throw new InvalidRefreshTokenError();
+    }
+
+    return this.getUser(payload.sub);
   }
 
   public async getUser(id: string): Promise<User> {

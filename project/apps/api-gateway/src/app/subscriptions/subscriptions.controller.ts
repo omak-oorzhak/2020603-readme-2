@@ -24,6 +24,7 @@ import { SubscriptionsService } from './subscriptions.service';
 import { SubscriptionParamDto } from './dto/subscription-param.dto';
 import { SubscriptionWithUserRdo } from './rdo/subscription-with-user.rdo';
 import { JwtAuthGuard } from '../common/jwt-auth.guard';
+import { CurrentUser } from '../common/current-user.decorator';
 
 @ApiTags('subscriptions')
 @Controller('subscriptions')
@@ -38,8 +39,8 @@ export class SubscriptionsController {
     description: 'Список подписок текущего пользователя',
     type: [SubscriptionWithUserRdo],
   })
-  public async index() {
-    return this.subscriptionsService.findSubscriptions();
+  public async index(@CurrentUser('sub') userId: string) {
+    return this.subscriptionsService.findSubscriptions(userId);
   }
 
   @Post(':followingId')
@@ -53,8 +54,11 @@ export class SubscriptionsController {
   @ApiCreatedResponse({ description: 'Подписка создана', type: SubscriptionWithUserRdo })
   @ApiBadRequestResponse({ description: 'Невалидный идентификатор пользователя' })
   @ApiConflictResponse({ description: 'Подписка уже существует или пользователь подписывается на себя' })
-  public async subscribe(@Param() params: SubscriptionParamDto) {
-    return this.subscriptionsService.subscribe(params);
+  public async subscribe(
+    @Param() params: SubscriptionParamDto,
+    @CurrentUser('sub') userId: string,
+  ) {
+    return this.subscriptionsService.subscribe(userId, params);
   }
 
   @Delete(':followingId')
@@ -69,7 +73,10 @@ export class SubscriptionsController {
   @ApiNoContentResponse({ description: 'Подписка удалена' })
   @ApiBadRequestResponse({ description: 'Невалидный идентификатор пользователя' })
   @ApiNotFoundResponse({ description: 'Подписка не найдена' })
-  public async unsubscribe(@Param() params: SubscriptionParamDto) {
-    await this.subscriptionsService.unsubscribe(params);
+  public async unsubscribe(
+    @Param() params: SubscriptionParamDto,
+    @CurrentUser('sub') userId: string,
+  ) {
+    await this.subscriptionsService.unsubscribe(userId, params);
   }
 }

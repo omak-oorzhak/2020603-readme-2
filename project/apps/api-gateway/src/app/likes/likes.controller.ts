@@ -21,6 +21,7 @@ import { LikesService } from './likes.service';
 import { PostIdParamDto } from './dto/post-id-param.dto';
 import { LikeRdo } from './rdo/like.rdo';
 import { JwtAuthGuard } from '../common/jwt-auth.guard';
+import { CurrentUser } from '../common/current-user.decorator';
 
 @ApiTags('likes')
 @Controller('posts/:postId/likes')
@@ -35,8 +36,11 @@ export class LikesController {
   @ApiCreatedResponse({ description: 'Лайк поставлен', type: LikeRdo })
   @ApiConflictResponse({ description: 'Лайк уже поставлен' })
   @ApiNotFoundResponse({ description: 'Публикация не найдена' })
-  public async addLike(@Param() params: PostIdParamDto) {
-    return this.likesService.addLike(params.postId);
+  public async addLike(
+    @Param() params: PostIdParamDto,
+    @CurrentUser('sub') userId: string,
+  ) {
+    return this.likesService.addLike(userId, params.postId);
   }
 
   @Delete()
@@ -47,7 +51,10 @@ export class LikesController {
   @ApiParam({ name: 'postId', description: 'Идентификатор публикации', format: 'uuid' })
   @ApiNoContentResponse({ description: 'Лайк убран' })
   @ApiNotFoundResponse({ description: 'Публикация не найдена' })
-  public async removeLike(@Param() params: PostIdParamDto) {
-    await this.likesService.removeLike(params.postId);
+  public async removeLike(
+    @Param() params: PostIdParamDto,
+    @CurrentUser('sub') userId: string,
+  ) {
+    await this.likesService.removeLike(userId, params.postId);
   }
 }

@@ -1,9 +1,19 @@
-### API Gateway — полный smoke (REST Client / WebStorm HTTP Client)
+### API Gateway — полный smoke (IntelliJ HTTP Client: WebStorm / IDEA)
 ### Запуск: npx nx serve api-gateway  (порт 3005)
 ### Предварительно поднять 4 сервиса: users (3001), blog (3002), notify (3003), file-storage (3004)
+###
+### Gateway проверяет JWT и передаёт идентификатор пользователя в blog
+### заголовком X-User-Id: публикации, лайки, комментарии и подписки
+### принадлежат владельцу токена.
+###
+### Значения из ответов сохраняются обработчиками `> {% client.global.set(...) %}`
+### и доступны дальше как {{token}}, {{postId}} и т. д. Запускайте запросы
+### сверху вниз: каждый следующий опирается на сохранённые значения.
+### Окружение `development` описано в apps/api-gateway/http-client.env.json — оно нужно,
+### чтобы выбранное в IDE окружение существовало. Тот же {{host}} продублирован ниже
+### как in-place переменная, и приоритет у неё: файл работает и без окружения.
 
 @host = http://localhost:3005/api
-@token = {{login.response.body.accessToken}}
 
 ############################################################
 # AUTH — register / login / password
@@ -33,7 +43,12 @@ Content-Type: image/jpeg
 < ../file-storage/sample/avatar.jpg
 --boundary--
 
-### REGISTER: без аватара (JSON не поддерживается — нужен multipart)
+> {%
+    client.global.set('userId', response.body.id);
+%}
+
+### REGISTER: второй пользователь, без аватара (JSON не поддерживается — нужен multipart)
+# @name registerSecond
 POST {{host}}/auth/register
 Content-Type: multipart/form-data; boundary=boundary
 
@@ -51,7 +66,11 @@ Content-Disposition: form-data; name="password"
 secret456
 --boundary--
 
-### LOGIN: вход (запоминаем токен как login)
+> {%
+    client.global.set('secondUserId', response.body.id);
+%}
+
+### LOGIN: вход (запоминаем токены)
 # @name login
 POST {{host}}/auth/login
 Content-Type: application/json
@@ -61,14 +80,31 @@ Content-Type: application/json
   "password": "secret123"
 }
 
-### PASSWORD: смена пароля (Bearer, id из токена)
-PATCH {{host}}/auth/password
-Authorization: Bearer {{token}}
+> {%
+    client.global.set('token', response.body.accessToken);
+    client.global.set('refreshToken', response.body.refreshToken);
+%}
+
+### LOGIN: вход вторым пользователем (для проверок «чужой» публикации)
+# @name secondLogin
+POST {{host}}/auth/login
 Content-Type: application/json
 
 {
-  "currentPassword": "secret123",
-  "newPassword": "new12345"
+  "email": "bob@example.com",
+  "password": "secret456"
+}
+
+> {%
+    client.global.set('secondToken', response.body.accessToken);
+%}
+
+### REFRESH: обменять refresh-токен на новую пару токенов
+POST {{host}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
 }
 
 ### 401: смена пароля без токена
@@ -103,7 +139,7 @@ secret123
 ############################################################
 
 ### Получить профиль пользователя (id из register)
-GET {{host}}/users/{{register.response.body.id}}
+GET {{host}}/users/{{userId}}
 
 ############################################################
 # POSTS — CRUD с обогащением авторов
@@ -121,6 +157,10 @@ Content-Type: application/json
   "text": "Полный текст публикации о том, как мы подключили PostgreSQL и Prisma ORM к сервису Blog, и что из этого вышло на практике.",
   "tags": ["typescript", "nestjs"]
 }
+
+> {%
+    client.global.set('postId', response.body.id);
+%}
 
 ### CREATE: видео-пост (Bearer)
 POST {{host}}/posts/video
@@ -172,20 +212,24 @@ Content-Disposition: form-data; name="tags"
 photo,nature
 --boundary--
 
-### READ: список публикаций (авторы обогащены, у stub-постов author: null)
+> {%
+    client.global.set('photoPostId', response.body.id);
+%}
+
+### READ: список публикаций (авторы обогащены данными из сервиса users)
 GET {{host}}/posts
 
 ### READ: список с фильтрами
 GET {{host}}/posts?limit=5&page=1&sortBy=likes&type=text&tag=typescript
 
 ### READ: одна публикация по id (берётся из createPost)
-GET {{host}}/posts/{{createPost.response.body.id}}
+GET {{host}}/posts/{{postId}}
 
 ### READ: 404 — несуществующий пост
-GET {{host}}/posts/nonexistent-uuid-0000-0000-0000-000000000000
+GET {{host}}/posts/2f4b7d3a-3c1b-4c4d-8b6a-8ef7b92f1011
 
-### SEARCH: поиск по заголовку
-GET {{host}}/posts/search?title=TypeScript
+### SEARCH: поиск по отдельным словам заголовка (§8.2)
+GET {{host}}/posts/search?title=TypeScript NestJS
 
 ### FEED: лента текущего пользователя (Bearer)
 GET {{host}}/posts/feed
@@ -196,7 +240,7 @@ GET {{host}}/posts/drafts
 Authorization: Bearer {{token}}
 
 ### UPDATE: обновить публикацию (по id из createPost)
-PATCH {{host}}/posts/{{createPost.response.body.id}}
+PATCH {{host}}/posts/{{postId}}
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
@@ -205,13 +249,9 @@ Content-Type: application/json
   "tags": ["typescript", "prisma"]
 }
 
-### REPOST: репостнуть публикацию (по id из createPost)
-POST {{host}}/posts/{{createPost.response.body.id}}/repost
-Authorization: Bearer {{token}}
-
-### DELETE: удалить публикацию (по id из createPost)
-DELETE {{host}}/posts/{{createPost.response.body.id}}
-Authorization: Bearer {{token}}
+### REPOST: репостнуть чужую публикацию (вторым пользователем)
+POST {{host}}/posts/{{postId}}/repost
+Authorization: Bearer {{secondToken}}
 
 ############################################################
 # COMMENTS — create / list / delete (для createPhotoPost)
@@ -219,7 +259,7 @@ Authorization: Bearer {{token}}
 
 ### CREATE: комментарий (Bearer)
 # @name createComment
-POST {{host}}/posts/{{createPhotoPost.response.body.id}}/comments
+POST {{host}}/posts/{{photoPostId}}/comments
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
@@ -227,11 +267,19 @@ Content-Type: application/json
   "text": "Отличная фотография, спасибо за подробности!"
 }
 
-### READ: комментарии к посту (с обогащением авторов)
-GET {{host}}/posts/{{createPhotoPost.response.body.id}}/comments
+> {%
+    client.global.set('commentId', response.body.id);
+%}
 
-### DELETE: удалить комментарий (по id из createComment)
-DELETE {{host}}/posts/{{createPhotoPost.response.body.id}}/comments/{{createComment.response.body.id}}
+### READ: комментарии к посту (с обогащением авторов)
+GET {{host}}/posts/{{photoPostId}}/comments
+
+### 403: удаление чужого комментария (§6.4)
+DELETE {{host}}/posts/{{photoPostId}}/comments/{{commentId}}
+Authorization: Bearer {{secondToken}}
+
+### DELETE: удалить свой комментарий (по id из createComment)
+DELETE {{host}}/posts/{{photoPostId}}/comments/{{commentId}}
 Authorization: Bearer {{token}}
 
 ############################################################
@@ -239,51 +287,134 @@ Authorization: Bearer {{token}}
 ############################################################
 
 ### ADD: поставить лайк (Bearer)
-POST {{host}}/posts/{{createPhotoPost.response.body.id}}/likes
-Authorization: Bearer {{token}}
+POST {{host}}/posts/{{photoPostId}}/likes
+Authorization: Bearer {{secondToken}}
+
+### 409: повторный лайк той же публикации (§5.3)
+POST {{host}}/posts/{{photoPostId}}/likes
+Authorization: Bearer {{secondToken}}
 
 ### REMOVE: убрать лайк (Bearer)
-DELETE {{host}}/posts/{{createPhotoPost.response.body.id}}/likes
-Authorization: Bearer {{token}}
+DELETE {{host}}/posts/{{photoPostId}}/likes
+Authorization: Bearer {{secondToken}}
 
 ############################################################
 # SUBSCRIPTIONS — list / subscribe / unsubscribe
 ############################################################
 
-### SUBSCRIBE: подписаться на пользователя (id из register)
-# @name subscribe
-POST {{host}}/subscriptions/{{register.response.body.id}}
+### SUBSCRIBE: подписаться на второго пользователя
+POST {{host}}/subscriptions/{{secondUserId}}
 Authorization: Bearer {{token}}
 
 ### READ: список подписок (с карточками пользователей)
 GET {{host}}/subscriptions
 Authorization: Bearer {{token}}
 
-### PROFILE: проверить subscribersCount после подписки
-GET {{host}}/users/{{register.response.body.id}}
+### PROFILE: проверить subscribersCount второго пользователя после подписки
+GET {{host}}/users/{{secondUserId}}
 
 ### UNSUBSCRIBE: отписаться (Bearer)
-DELETE {{host}}/subscriptions/{{register.response.body.id}}
+DELETE {{host}}/subscriptions/{{secondUserId}}
 Authorization: Bearer {{token}}
 
 ############################################################
 # NEWSLETTERS — запуск рассылки
 ############################################################
 
-### TRIGGER: запуск рассылки дайджеста (Bearer)
+### TRIGGER: запуск рассылки дайджеста (Bearer). Письма — в Mailpit: http://localhost:8025
 POST {{host}}/newsletters
 Authorization: Bearer {{token}}
 
 ############################################################
-# ERROR CASES — passthrough ошибок downstream
+# ERROR CASES — правила доступа и passthrough ошибок downstream
 ############################################################
 
+### 403: регистрация с валидным токеном — только для анонимных (§1.1)
+POST {{host}}/auth/register
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="email"
+
+carol@example.com
+--boundary
+Content-Disposition: form-data; name="name"
+
+Кэрол Смирнова
+--boundary
+Content-Disposition: form-data; name="password"
+
+secret789
+--boundary--
+
+### 403: редактирование чужой публикации (§2.2)
+PATCH {{host}}/posts/{{postId}}
+Authorization: Bearer {{secondToken}}
+Content-Type: application/json
+
+{
+  "title": "Чужой заголовок, который не должен примениться"
+}
+
+### 409: репост собственной публикации (§2.13)
+POST {{host}}/posts/{{postId}}/repost
+Authorization: Bearer {{token}}
+
+### 400: невалидные теги (пробел, цифра в начале, 2 и 11 символов)
+POST {{host}}/posts/quote
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quoteText": "Любая достаточно продвинутая технология неотличима от магии.",
+  "quoteAuthor": "Артур Кларк",
+  "tags": ["two words", "1abc", "ab", "abcdefghijk"]
+}
+
+### Черновик: переводим публикацию в «Черновик» (§2.12)
+PATCH {{host}}/posts/{{postId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "draft"
+}
+
+### 404: чужой черновик не виден по прямой ссылке (§3.5)
+GET {{host}}/posts/{{postId}}
+Authorization: Bearer {{secondToken}}
+
+### 200: автор видит свой черновик по прямой ссылке (токен необязателен, но меняет ответ)
+GET {{host}}/posts/{{postId}}
+Authorization: Bearer {{token}}
+
+### 404: лайк черновика запрещён (§5.2)
+POST {{host}}/posts/{{postId}}/likes
+Authorization: Bearer {{secondToken}}
+
+### Возвращаем публикацию в «Опубликована»
+PATCH {{host}}/posts/{{postId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "published"
+}
+
+### 401: защищённый маршрут без токена
+GET {{host}}/posts/feed
+
+### 403: удаление чужой публикации (§2.2)
+DELETE {{host}}/posts/{{postId}}
+Authorization: Bearer {{secondToken}}
+
+### DELETE: удалить свою публикацию (выполнять последним — дальше id больше не нужен)
+DELETE {{host}}/posts/{{postId}}
+Authorization: Bearer {{token}}
+
 ### 503: остановленный file-storage — фото-пост недоступен
-# (остановите file-storage и повторите)
-# POST {{host}}/posts/photo
-# Authorization: Bearer {{token}}
-# Content-Type: multipart/form-data; boundary=boundary
-# ...
+# (остановите file-storage и повторите запрос CREATE PHOTO)
 
 ### Swagger UI: http://localhost:3005/spec
 ############################################################

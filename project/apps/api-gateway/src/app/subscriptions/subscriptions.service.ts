@@ -17,8 +17,10 @@ export class SubscriptionsService {
     private readonly usersClient: UsersClient,
   ) {}
 
-  public async findSubscriptions(): Promise<SubscriptionWithUserRdo[]> {
-    const subscriptions = await this.blogClient.getSubscriptions();
+  public async findSubscriptions(
+    userId: string,
+  ): Promise<SubscriptionWithUserRdo[]> {
+    const subscriptions = await this.blogClient.getSubscriptions(userId);
     if (subscriptions.length === 0) {
       return [];
     }
@@ -32,9 +34,13 @@ export class SubscriptionsService {
   }
 
   public async subscribe(
+    userId: string,
     params: SubscriptionParamDto,
   ): Promise<SubscriptionWithUserRdo> {
-    const subscription = await this.blogClient.subscribe(params.followingId);
+    const subscription = await this.blogClient.subscribe(
+      userId,
+      params.followingId,
+    );
     const userMap = await this.usersClient.getUserInfoMap([
       subscription.followingId,
     ]);
@@ -44,7 +50,10 @@ export class SubscriptionsService {
     } satisfies EnrichedSubscription);
   }
 
-  public async unsubscribe(params: SubscriptionParamDto): Promise<void> {
-    await this.blogClient.unsubscribe(params.followingId);
+  public async unsubscribe(
+    userId: string,
+    params: SubscriptionParamDto,
+  ): Promise<void> {
+    await this.blogClient.unsubscribe(userId, params.followingId);
   }
 }

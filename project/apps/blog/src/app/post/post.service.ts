@@ -17,10 +17,12 @@ import type { CreateTextPostDto } from './dto/create-text-post.dto';
 import type { CreateQuotePostDto } from './dto/create-quote-post.dto';
 import type { CreatePhotoPostDto } from './dto/create-photo-post.dto';
 import type { CreateLinkPostDto } from './dto/create-link-post.dto';
+import type { UpdatePostDto } from './dto/update-post.dto';
 import {
   PostNotFoundError,
   PostEditForbiddenError,
   PostAlreadyRepostedError,
+  SelfRepostError,
 } from './post.errors';
 
 type CreatePostDto =
@@ -57,9 +59,30 @@ export class PostService {
     return saved;
   }
 
-  public async findPost(id: string): Promise<Post> {
+  /**
+   * Детальная информация о публикации (§2.14). Черновик виден только автору:
+   * для остальных он «не найден», чтобы не раскрывать его существование (§3.5).
+   */
+  public async findPost(id: string, requesterId?: string): Promise<Post> {
     const post = await this.postRepository.findById(id);
     if (!post) throw new PostNotFoundError(id);
+
+    if (post.status !== PostStatus.Published && post.authorId !== requesterId) {
+      throw new PostNotFoundError(id);
+    }
+
+    return post;
+  }
+
+  /**
+   * Публикация в статусе «Опубликована»: лайки (§5.2), комментарии (§6.5) и
+   * репост (§2.13) применимы только к ней.
+   */
+  public async findPublishedPost(id: string): Promise<Post> {
+    const post = await this.postRepository.findById(id);
+    if (!post || post.status !== PostStatus.Published) {
+      throw new PostNotFoundError(id);
+    }
     return post;
   }
 
@@ -89,13 +112,19 @@ export class PostService {
 
   public async updatePost(
     id: string,
-    dto: Partial<CreatePostDto>,
+    dto: UpdatePostDto,
     authorId: string,
   ): Promise<Post> {
-    const post = await this.findPost(id);
+    const post = await this.findPost(id, authorId);
     if (post.authorId !== authorId) throw new PostEditForbiddenError();
 
-    Object.assign(post, dto, {
+    // Берём только переданные поля: у скомпилированного DTO необъявленные
+    // свойства существуют со значением `undefined` и затёрли бы данные поста.
+    const patch = Object.fromEntries(
+      Object.entries(dto).filter(([, value]) => value !== undefined),
+    );
+
+    Object.assign(post, patch, {
       tags: dto.tags ? this.normalizeTags(dto.tags) : post.tags,
     });
 
@@ -103,13 +132,17 @@ export class PostService {
   }
 
   public async deletePost(id: string, authorId: string): Promise<void> {
-    const post = await this.findPost(id);
+    const post = await this.findPost(id, authorId);
     if (post.authorId !== authorId) throw new PostEditForbiddenError();
     await this.postRepository.deleteById(id);
   }
 
   public async repost(postId: string, authorId: string): Promise<Post> {
-    const original = await this.findPost(postId);
+    const original = await this.findPublishedPost(postId);
+
+    if (original.authorId === authorId) {
+      throw new SelfRepostError();
+    }
 
     const existingRepost = await this.postRepository.findRepost(postId, authorId);
     if (existingRepost) {

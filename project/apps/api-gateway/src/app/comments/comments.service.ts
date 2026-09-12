@@ -40,10 +40,11 @@ export class CommentsService {
   }
 
   public async createComment(
+    userId: string,
     postId: string,
     dto: CreateCommentDto,
   ): Promise<CommentWithAuthorRdo> {
-    const comment = await this.blogClient.createComment(postId, dto);
+    const comment = await this.blogClient.createComment(userId, postId, dto);
     const authorMap = await this.usersClient.getUserInfoMap([comment.authorId]);
     return fillRdo(CommentWithAuthorRdo, {
       ...comment,
@@ -52,9 +53,10 @@ export class CommentsService {
   }
 
   public async deleteComment(
+    userId: string,
     postId: string,
     commentId: string,
   ): Promise<void> {
-    await this.blogClient.deleteComment(postId, commentId);
+    await this.blogClient.deleteComment(userId, postId, commentId);
   }
 }

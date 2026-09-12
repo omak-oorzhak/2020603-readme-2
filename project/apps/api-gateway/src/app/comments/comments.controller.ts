@@ -15,6 +15,7 @@ import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiNoContentResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOperation,
   ApiParam,
@@ -28,6 +29,7 @@ import { PostIdParamDto } from './dto/post-id-param.dto';
 import { CommentParamDto } from './dto/comment-param.dto';
 import { CommentWithAuthorRdo } from './rdo/comment-with-author.rdo';
 import { JwtAuthGuard } from '../common/jwt-auth.guard';
+import { CurrentUser } from '../common/current-user.decorator';
 import { ApiPaginatedResponse } from '../common/api-paginated-response.decorator';
 
 @ApiTags('comments')
@@ -57,9 +59,10 @@ export class CommentsController {
   @ApiBadRequestResponse({ description: 'Невалидные данные комментария' })
   public async create(
     @Param() params: PostIdParamDto,
+    @CurrentUser('sub') userId: string,
     @Body() dto: CreateCommentDto,
   ) {
-    return this.commentsService.createComment(params.postId, dto);
+    return this.commentsService.createComment(userId, params.postId, dto);
   }
 
   @Delete(':commentId')
@@ -70,8 +73,16 @@ export class CommentsController {
   @ApiParam({ name: 'postId', description: 'Идентификатор публикации', format: 'uuid' })
   @ApiParam({ name: 'commentId', description: 'Идентификатор комментария', format: 'uuid' })
   @ApiNoContentResponse({ description: 'Комментарий удалён' })
+  @ApiForbiddenResponse({ description: 'Удалять можно только свои комментарии' })
   @ApiNotFoundResponse({ description: 'Комментарий не найден' })
-  public async destroy(@Param() params: CommentParamDto) {
-    await this.commentsService.deleteComment(params.postId, params.commentId);
+  public async destroy(
+    @Param() params: CommentParamDto,
+    @CurrentUser('sub') userId: string,
+  ) {
+    await this.commentsService.deleteComment(
+      userId,
+      params.postId,
+      params.commentId,
+    );
   }
 }

@@ -20,6 +20,7 @@ import {
   ApiConflictResponse,
   ApiConsumes,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -30,9 +31,11 @@ import { AuthService } from './auth.service';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
 import { ChangeUserPasswordDto } from './dto/change-user-password.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { UserRdo } from './rdo/user.rdo';
 import { LoggedUserRdo } from './rdo/logged-user.rdo';
 import { JwtAuthGuard } from '../common/jwt-auth.guard';
+import { AnonymousGuard } from '../common/anonymous.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { AVATAR_MAX_FILE_SIZE, IMAGE_MIME_TYPE_PATTERN } from '../common/upload.constant';
 
@@ -55,6 +58,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @UseGuards(AnonymousGuard)
   @UseInterceptors(FileInterceptor('avatar'))
   @ApiOperation({ summary: 'Регистрация нового пользователя (с опциональным аватаром)' })
   @ApiConsumes('multipart/form-data')
@@ -62,6 +66,7 @@ export class AuthController {
   @ApiCreatedResponse({ description: 'Пользователь успешно создан', type: UserRdo })
   @ApiBadRequestResponse({ description: 'Невалидные данные регистрации или файла' })
   @ApiConflictResponse({ description: 'Пользователь с таким email уже существует' })
+  @ApiForbiddenResponse({ description: 'Регистрация доступна только анонимным клиентам' })
   public async register(
     @Body() dto: RegisterUserDto,
     @UploadedFile(
@@ -87,6 +92,17 @@ export class AuthController {
   @ApiNotFoundResponse({ description: 'Пользователь не найден' })
   public async login(@Body() dto: LoginUserDto): Promise<LoggedUserRdo> {
     return this.authService.login(dto);
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Обменять refresh-токен на новую пару токенов' })
+  @ApiOkResponse({ description: 'Новая пара токенов', type: LoggedUserRdo })
+  @ApiBadRequestResponse({ description: 'Невалидный формат токена' })
+  @ApiUnauthorizedResponse({ description: 'Refresh-токен недействителен или истёк' })
+  @ApiNotFoundResponse({ description: 'Пользователь не найден' })
+  public async refresh(@Body() dto: RefreshTokenDto): Promise<LoggedUserRdo> {
+    return this.authService.refresh(dto);
   }
 
   @Patch('password')

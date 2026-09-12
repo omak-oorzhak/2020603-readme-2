@@ -290,3 +290,107 @@
  
 ## Необязательные сценарии:
 – Моя лента.
+---
+
+# Запуск проекта
+
+## Требования
+
+- **Node.js 20+** (актуальный LTS) и npm.
+- **Docker** с плагином Compose — поднимает PostgreSQL, RabbitMQ, Mailpit и pgAdmin.
+
+Весь код находится в каталоге `project/`. Все команды `npm`, `npx nx`, `prisma` и `docker compose` выполняются **из `project/`**.
+
+```bash
+cd project
+npm install
+```
+
+## Состав приложения
+
+| Сервис | Назначение | Порт приложения | Swagger | Хранилище |
+|---|---|---|---|---|
+| `users` | Регистрация, авторизация (JWT), смена пароля, карточка пользователя | 3001 | http://localhost:3001/spec | PostgreSQL `5434` |
+| `blog` | Публикации, комментарии, лайки, подписки, лента, поиск | 3002 | http://localhost:3002/spec | PostgreSQL `5433` |
+| `notify` | Почтовые уведомления о новых публикациях | 3003 | http://localhost:3003/spec | PostgreSQL `5435` + RabbitMQ |
+| `file-storage` | Загрузка и отдача изображений (аватары, фото-публикации) | 3004 | http://localhost:3004/spec | PostgreSQL `5436` + файловая система |
+| `api-gateway` | Единая точка входа: аутентификация, проксирование, агрегация | 3005 | http://localhost:3005/spec | — (stateless) |
+
+Вспомогательные интерфейсы: RabbitMQ UI http://localhost:15672, Mailpit UI http://localhost:8025, pgAdmin — `8082` (blog), `8083` (users), `8084` (notify), `8085` (file-storage). Логин/пароль везде `admin` / `test`, у pgAdmin — `admin@readme.com` / `test`.
+
+## Шаг 1. Переменные окружения
+
+Файлы `.env` не хранятся в репозитории. Для каждого сервиса скопируйте образец:
+
+```bash
+for app in users blog notify file-storage api-gateway; do cp "apps/$app/.env.example" "apps/$app/.env"; done
+```
+
+Два условия обязательны:
+
+- `JWT_ACCESS_TOKEN_SECRET` в `apps/api-gateway/.env` и `apps/users/.env` должен совпадать байт в байт — шлюз проверяет токен локально.
+- `RABBITMQ_QUEUE` одинаков у `users`, `blog` и `notify`: первые два публикуют события в очередь, которую слушает `notify`.
+
+## Шаг 2. Инфраструктура
+
+```bash
+docker compose -f apps/users/compose.yaml up -d
+docker compose -f apps/blog/compose.yaml up -d
+docker compose -f apps/notify/compose.yaml up -d
+docker compose -f apps/file-storage/compose.yaml up -d
+```
+
+## Шаг 3. Схемы баз данных и демо-данные
+
+```bash
+npx nx db-migrate users --name init
+npx nx db-migrate blog --name init
+npx nx db-migrate notify --name init
+npx nx db-migrate file-storage --name init
+```
+
+Демо-данные (необязательно): три пользователя с паролем `secret123`, публикации всех пяти видов, комментарии, лайки и подписки. Идентификаторы авторов в `blog` совпадают с пользователями из `users`.
+
+```bash
+npx nx db-fill users
+npx nx db-fill blog
+npx nx db-fill notify
+```
+
+## Шаг 4. Запуск сервисов
+
+Каждая команда запускается в отдельном терминале. `api-gateway` поднимается последним — он обращается к остальным четырём.
+
+```bash
+npx nx serve users
+npx nx serve blog
+npx nx serve notify
+npx nx serve file-storage
+npx nx serve api-gateway
+```
+
+Приложение доступно по адресу http://localhost:3005/api, документация OpenAPI — http://localhost:3005/spec.
+
+## Проверка вручную
+
+Готовые наборы запросов для REST Client (WebStorm, VS Code):
+
+- `apps/api-gateway/api-gateway.http` — сквозной сценарий через точку входа: регистрация с аватаром, вход, публикации всех видов, комментарии, лайки, подписки, рассылка и негативные проверки правил доступа.
+- `apps/blog/blog.http`, `apps/file-storage/file-storage.http`, `apps/notify/notify.http` — прямые запросы к отдельным сервисам.
+
+Письма рассылки приходят в Mailpit: запустите `POST http://localhost:3005/api/newsletters` с токеном и откройте http://localhost:8025.
+
+## Сборка, тесты, линтер
+
+```bash
+npx nx run-many -t build
+npx nx run-many -t test
+npx nx run-many -t lint
+```
+
+## Архитектурные замечания
+
+- Аутентификация выполняется только в `api-gateway`: он проверяет подпись JWT и передаёт идентификатор пользователя внутренним сервисам заголовком `X-User-Id`. Сервисы за шлюзом наружу не публикуются.
+- При входе выдаётся пара токенов. Access-токен живёт 15 минут, обновить пару можно запросом `POST /api/auth/refresh` с refresh-токеном.
+- Межсервисные ссылки (`authorId`, `userId`, `followerId`, `followingId`) хранятся как непрозрачные строковые идентификаторы без внешних ключей между базами.
+- `users` и `blog` публикуют события `add.subscriber` и `add.post` в RabbitMQ; `notify` накапливает их и по запросу рассылает дайджест новых публикаций с момента прошлой рассылки.

@@ -67,6 +67,16 @@ export class UsersClient {
     return body;
   }
 
+  public async refresh(data: { refreshToken: string }): Promise<LoginResponse> {
+    const { data: body } = await firstValueFrom(
+      this.httpService.post<LoginResponse>(
+        `${this.config.usersServiceUrl}/auth/refresh`,
+        data,
+      ),
+    );
+    return body;
+  }
+
   public async getUser(id: string): Promise<UserResponse> {
     const { data: body } = await firstValueFrom(
       this.httpService.get<UserResponse>(

@@ -36,16 +36,18 @@ export class PostsService {
   }
 
   public async findFeed(
+    userId: string,
     query: GetPostQueryDto,
   ): Promise<PaginationResult<PostWithAuthorRdo>> {
-    const posts = await this.blogClient.getFeed(query);
+    const posts = await this.blogClient.getFeed(userId, query);
     return this.enrichPagination(posts);
   }
 
   public async findDrafts(
+    userId: string,
     query: GetPostQueryDto,
   ): Promise<PaginationResult<PostWithAuthorRdo>> {
-    const posts = await this.blogClient.getDrafts(query);
+    const posts = await this.blogClient.getDrafts(userId, query);
     return this.enrichPagination(posts);
   }
 
@@ -54,15 +56,19 @@ export class PostsService {
     return this.enrichList(posts);
   }
 
-  public async findOne(id: string): Promise<PostWithAuthorRdo> {
-    const post = await this.blogClient.getPost(id);
+  public async findOne(
+    id: string,
+    userId?: string,
+  ): Promise<PostWithAuthorRdo> {
+    const post = await this.blogClient.getPost(id, userId);
     return this.enrichPost(post);
   }
 
   public async createVideo(
+    userId: string,
     dto: CreateVideoPostDto,
   ): Promise<PostWithAuthorRdo> {
-    const post = await this.blogClient.createPost(PostType.Video, {
+    const post = await this.blogClient.createPost(userId, PostType.Video, {
       ...dto,
       type: PostType.Video,
     });
@@ -70,9 +76,10 @@ export class PostsService {
   }
 
   public async createText(
+    userId: string,
     dto: CreateTextPostDto,
   ): Promise<PostWithAuthorRdo> {
-    const post = await this.blogClient.createPost(PostType.Text, {
+    const post = await this.blogClient.createPost(userId, PostType.Text, {
       ...dto,
       type: PostType.Text,
     });
@@ -80,9 +87,10 @@ export class PostsService {
   }
 
   public async createQuote(
+    userId: string,
     dto: CreateQuotePostDto,
   ): Promise<PostWithAuthorRdo> {
-    const post = await this.blogClient.createPost(PostType.Quote, {
+    const post = await this.blogClient.createPost(userId, PostType.Quote, {
       ...dto,
       type: PostType.Quote,
     });
@@ -90,9 +98,10 @@ export class PostsService {
   }
 
   public async createLink(
+    userId: string,
     dto: CreateLinkPostDto,
   ): Promise<PostWithAuthorRdo> {
-    const post = await this.blogClient.createPost(PostType.Link, {
+    const post = await this.blogClient.createPost(userId, PostType.Link, {
       ...dto,
       type: PostType.Link,
     });
@@ -100,11 +109,12 @@ export class PostsService {
   }
 
   public async createPhoto(
+    userId: string,
     dto: CreatePhotoPostDto,
     file: Express.Multer.File,
   ): Promise<PostWithAuthorRdo> {
     const stored = await this.fileStorageClient.uploadPhoto(file);
-    const post = await this.blogClient.createPhotoPost({
+    const post = await this.blogClient.createPhotoPost(userId, {
       type: PostType.Photo,
       photoUrl: stored.url,
       tags: dto.tags,
@@ -113,19 +123,23 @@ export class PostsService {
   }
 
   public async update(
+    userId: string,
     id: string,
     dto: UpdatePostDto,
   ): Promise<PostWithAuthorRdo> {
-    const post = await this.blogClient.updatePost(id, { ...dto });
+    const post = await this.blogClient.updatePost(userId, id, { ...dto });
     return this.enrichPost(post);
   }
 
-  public async delete(id: string): Promise<void> {
-    await this.blogClient.deletePost(id);
+  public async delete(userId: string, id: string): Promise<void> {
+    await this.blogClient.deletePost(userId, id);
   }
 
-  public async repost(id: string): Promise<PostWithAuthorRdo> {
-    const post = await this.blogClient.repost(id);
+  public async repost(
+    userId: string,
+    id: string,
+  ): Promise<PostWithAuthorRdo> {
+    const post = await this.blogClient.repost(userId, id);
     return this.enrichPost(post);
   }
 

@@ -2,6 +2,8 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
   IsArray,
+  IsDateString,
+  IsEnum,
   IsOptional,
   IsString,
   IsUrl,
@@ -9,6 +11,12 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import {
+  MAX_TAGS_COUNT,
+  TAG_PATTERN,
+  TAG_VALIDATION_MESSAGE,
+} from '../posts.constant';
+import { PostStatus } from '@project/shared-types';
 
 export class UpdatePostDto {
   @ApiProperty({ description: 'Заголовок (video, text) — 20–50 символов', required: false })
@@ -77,6 +85,26 @@ export class UpdatePostDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  @ArrayMaxSize(8)
+  @ArrayMaxSize(MAX_TAGS_COUNT)
+  @Matches(TAG_PATTERN, { each: true, message: TAG_VALIDATION_MESSAGE })
   public tags?: string[];
+
+  @ApiProperty({
+    description: 'Дата публикации (§2.11) — влияет на сортировку',
+    required: false,
+    format: 'date-time',
+    example: '2026-09-13T10:00:00.000Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  public publishedAt?: string;
+
+  @ApiProperty({
+    enum: PostStatus,
+    description: 'Статус публикации (§2.12): published | draft',
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(PostStatus)
+  public status?: PostStatus;
 }

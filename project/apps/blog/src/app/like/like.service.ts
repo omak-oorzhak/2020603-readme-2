@@ -1,19 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { LikeRepository } from './like.repository';
-import { PostRepository } from '../post/post.repository';
-import { PostNotFoundError } from '../post/post.errors';
+import { PostService } from '../post/post.service';
 import { LikeAlreadyExistsError } from './like.errors';
 
 @Injectable()
 export class LikeService {
   constructor(
     private readonly likeRepository: LikeRepository,
-    private readonly postRepository: PostRepository,
+    private readonly postService: PostService,
   ) {}
 
   public async addLike(postId: string, userId: string) {
-    const post = await this.postRepository.findById(postId);
-    if (!post) throw new PostNotFoundError(postId);
+    // §5.2: лайкать можно только опубликованную публикацию.
+    await this.postService.findPublishedPost(postId);
 
     const existing = await this.likeRepository.findByPostAndUser(postId, userId);
     if (existing) throw new LikeAlreadyExistsError(postId);
@@ -23,9 +22,7 @@ export class LikeService {
   }
 
   public async removeLike(postId: string, userId: string) {
-    const post = await this.postRepository.findById(postId);
-    if (!post) throw new PostNotFoundError(postId);
-
+    await this.postService.findPublishedPost(postId);
     await this.likeRepository.deleteByPostAndUser(postId, userId);
   }
 }

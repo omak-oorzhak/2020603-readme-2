@@ -4,9 +4,15 @@ import {
   IsArray,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
+import {
+  MAX_TAGS_COUNT,
+  TAG_PATTERN,
+  TAG_VALIDATION_MESSAGE,
+} from '../posts.constant';
 
 export class CreateTextPostDto {
   @ApiProperty({ example: 'Мой первый пост о TypeScript разработке', description: '20–50 символов' })
@@ -31,6 +37,7 @@ export class CreateTextPostDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  @ArrayMaxSize(8)
+  @ArrayMaxSize(MAX_TAGS_COUNT)
+  @Matches(TAG_PATTERN, { each: true, message: TAG_VALIDATION_MESSAGE })
   public tags?: string[];
 }

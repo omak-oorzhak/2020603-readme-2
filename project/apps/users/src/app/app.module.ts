@@ -5,7 +5,11 @@ import { AppService } from './app.service';
 import { UserModule } from './user/user.module';
 import { AuthenticationModule } from './authentication/authentication.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { appConfig, postgresConfig } from '@project/shared-config';
+import {
+  appConfig,
+  postgresConfig,
+  rabbitmqConfig,
+} from '@project/shared-config';
 import { jwtConfig, validateEnv } from './config';
 
 @Module({
@@ -14,7 +18,7 @@ import { jwtConfig, validateEnv } from './config';
       isGlobal: true,
       cache: true,
       envFilePath: 'apps/users/.env',
-      load: [appConfig, postgresConfig, jwtConfig],
+      load: [appConfig, postgresConfig, jwtConfig, rabbitmqConfig],
       validate: validateEnv,
     }),
     PrismaModule,

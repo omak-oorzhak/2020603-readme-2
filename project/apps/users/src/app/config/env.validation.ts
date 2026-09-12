@@ -58,6 +58,28 @@ export class EnvironmentVariables {
   @IsString()
   @MinLength(1)
   public JWT_REFRESH_TOKEN_EXPIRES_IN!: string;
+
+  // RabbitMQ — продюсер события `add.subscriber` для сервиса notify.
+  @IsString()
+  @MinLength(1)
+  public RABBITMQ_HOST!: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(65535)
+  public RABBITMQ_PORT!: number;
+
+  @IsString()
+  @MinLength(1)
+  public RABBITMQ_USER!: string;
+
+  @IsString()
+  @MinLength(1)
+  public RABBITMQ_PASSWORD!: string;
+
+  @IsString()
+  @MinLength(1)
+  public RABBITMQ_QUEUE!: string;
 }
 
 export function validateEnv(

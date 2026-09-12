@@ -20,10 +20,12 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString }),
 });
 
-// Идентификаторы авторов имитируют opaque-id из сервиса Users (без FK — правило проекта).
-const AUTHOR_1 = '6571e8c9b4a1f2d3e4a5b6c7';
-const AUTHOR_2 = '6571e8c9b4a1f2d3e4a5b6c8';
-const AUTHOR_3 = '6571e8c9b4a1f2d3e4a5b6c9';
+// Opaque-id авторов из сервиса Users (без FK — правило проекта). Значения
+// совпадают с apps/users/prisma/seed.ts, поэтому API Gateway после сидов
+// обогащает публикации реальными карточками авторов, а не отдаёт author: null.
+const AUTHOR_1 = '2f4b7d3a-3c1b-4c4d-8b6a-8ef7b92f1011';
+const AUTHOR_2 = '9c8e7b6a-5f4d-43c2-9a1b-0e9d8c7b6a52';
+const AUTHOR_3 = 'a1d2c3b4-5e6f-47a8-9b0c-1d2e3f4a5b6c';
 
 async function clean(): Promise<void> {
   // Идемпотентность: чистим перед заполнением. Порядок учитывает связи,

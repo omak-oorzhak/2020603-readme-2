@@ -24,6 +24,7 @@ import { AuthenticationService } from './authentication.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
 import { ChangeUserPasswordDto } from './dto/change-user-password.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LoggedUserRdo } from './rdo/logged-user.rdo';
 import { UserIdParamDto } from '../user/dto/user-id-param.dto';
 import { UserRdo } from '../user/rdo/user.rdo';
@@ -57,6 +58,26 @@ export class AuthenticationController {
   @ApiNotFoundResponse({ description: 'Пользователь не найден' })
   public async login(@Body() dto: LoginUserDto): Promise<LoggedUserRdo> {
     const user = await this.authenticationService.verifyUser(dto);
+    const tokens = await this.authenticationService.createTokens(user);
+
+    return {
+      id: user.id,
+      email: user.email,
+      ...tokens,
+    };
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Обменять refresh-токен на новую пару токенов' })
+  @ApiOkResponse({ description: 'Новая пара токенов', type: LoggedUserRdo })
+  @ApiBadRequestResponse({ description: 'Невалидный формат токена' })
+  @ApiUnauthorizedResponse({ description: 'Refresh-токен недействителен или истёк' })
+  @ApiNotFoundResponse({ description: 'Пользователь не найден' })
+  public async refresh(@Body() dto: RefreshTokenDto): Promise<LoggedUserRdo> {
+    const user = await this.authenticationService.verifyRefreshToken(
+      dto.refreshToken,
+    );
     const tokens = await this.authenticationService.createTokens(user);
 
     return {

@@ -6,8 +6,14 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
 } from 'class-validator';
 import { PostType } from '@project/shared-types';
+import {
+  MAX_TAGS_COUNT,
+  TAG_PATTERN,
+  TAG_VALIDATION_MESSAGE,
+} from '../post.constant';
 
 export class CreatePhotoPostDto {
   @ApiProperty({ example: PostType.Photo, enum: PostType })
@@ -22,6 +28,7 @@ export class CreatePhotoPostDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  @ArrayMaxSize(8)
+  @ArrayMaxSize(MAX_TAGS_COUNT)
+  @Matches(TAG_PATTERN, { each: true, message: TAG_VALIDATION_MESSAGE })
   public tags?: string[];
 }

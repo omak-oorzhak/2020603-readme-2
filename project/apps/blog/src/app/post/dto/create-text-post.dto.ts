@@ -5,10 +5,16 @@ import {
   IsArray,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
 import { PostType } from '@project/shared-types';
+import {
+  MAX_TAGS_COUNT,
+  TAG_PATTERN,
+  TAG_VALIDATION_MESSAGE,
+} from '../post.constant';
 
 export class CreateTextPostDto {
   @ApiProperty({ example: PostType.Text, enum: PostType })
@@ -37,6 +43,7 @@ export class CreateTextPostDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  @ArrayMaxSize(8)
+  @ArrayMaxSize(MAX_TAGS_COUNT)
+  @Matches(TAG_PATTERN, { each: true, message: TAG_VALIDATION_MESSAGE })
   public tags?: string[];
 }

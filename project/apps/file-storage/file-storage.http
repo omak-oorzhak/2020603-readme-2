@@ -1,5 +1,8 @@
-### File Storage Service — загрузка/отдача файлов (REST Client / WebStorm HTTP Client)
+### File Storage Service — загрузка/отдача файлов (IntelliJ HTTP Client: WebStorm / IDEA)
 ### Запуск сервиса: npx nx serve file-storage  (порт из apps/file-storage/.env: 3004)
+###
+### Идентификатор и url загруженного файла сохраняются обработчиком
+### `> {% client.global.set(...) %}` и доступны дальше как {{fileId}}, {{fileUrl}}.
 
 @host = http://localhost:3004/api
 
@@ -18,6 +21,11 @@ Content-Type: image/jpeg
 
 < ./sample/avatar.jpg
 ------WebKitFormBoundary--
+
+> {%
+    client.global.set('fileId', response.body.id);
+    client.global.set('fileUrl', response.body.url);
+%}
 
 ############################################################
 # UPLOAD — photo (jpeg/png, до 1 МБ)
@@ -40,14 +48,14 @@ Content-Type: image/png
 ############################################################
 
 ### READ: информация о файле (берётся id из ответа uploadAvatar)
-GET {{host}}/files/{{uploadAvatar.response.body.id}}
+GET {{host}}/files/{{fileId}}
 
 ############################################################
 # READ — бинарник через статику (вне префикса /api)
 ############################################################
 
 ### READ: скачать файл по url из ответа uploadAvatar
-GET {{uploadAvatar.response.body.url}}
+GET {{fileUrl}}
 
 ############################################################
 # NEGATIVE — валидация

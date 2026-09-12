@@ -235,11 +235,22 @@ export class PostRepository {
     );
   }
 
+  /**
+   * Поиск по заголовку (§8.2): достаточно совпадения отдельных слов запроса,
+   * поэтому слова объединяются через OR. Заголовки есть только у video/text.
+   */
   public async findByTitle(title: string): Promise<Post[]> {
+    const words = title.split(/\s+/).filter(Boolean);
+    if (words.length === 0) {
+      return [];
+    }
+
     const records = await this.prisma.post.findMany({
       where: {
         status: PostStatus.Published,
-        title: { contains: title, mode: 'insensitive' },
+        OR: words.map((word) => ({
+          title: { contains: word, mode: 'insensitive' },
+        })),
       },
       include: POST_INCLUDE,
       orderBy: { publishedAt: 'desc' },

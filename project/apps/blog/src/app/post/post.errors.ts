@@ -21,3 +21,9 @@ export class PostAlreadyRepostedError extends BusinessRuleViolationError {
     super(`Публикация "${postId}" уже была репостнута этим пользователем`);
   }
 }
+
+export class SelfRepostError extends BusinessRuleViolationError {
+  constructor() {
+    super('Нельзя репостить собственную публикацию');
+  }
+}

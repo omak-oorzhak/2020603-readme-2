@@ -1,16 +1,30 @@
-### Blog Service — базовый CRUD (REST Client / WebStorm HTTP Client)
+### Blog Service — прямой доступ (IntelliJ HTTP Client: WebStorm / IDEA)
 ### Запуск сервиса: npx nx serve blog  (порт из apps/blog/.env: 3002)
+###
+### Blog — внутренний сервис: JWT он не проверяет, а доверяет заголовку
+### X-User-Id, который проставляет API Gateway после верификации токена.
+### При прямых запросах заголовок подставляем вручную.
+### Значения ниже совпадают с демо-пользователями из `npx nx db-fill users`.
+###
+### Идентификаторы из ответов сохраняются обработчиками
+### `> {% client.global.set(...) %}` и доступны дальше как {{postId}}, {{commentId}}.
+### Окружение `development` описано в apps/blog/http-client.env.json — оно нужно,
+### чтобы выбранное в IDE окружение существовало. Те же значения продублированы
+### ниже как in-place переменные, и приоритет у них: файл работает и без окружения.
 
 @host = http://localhost:3002/api
+@userId = 2f4b7d3a-3c1b-4c4d-8b6a-8ef7b92f1011
+@otherUserId = 9c8e7b6a-5f4d-43c2-9a1b-0e9d8c7b6a52
 
 ############################################################
 # POSTS — CRUD
 ############################################################
 
-### CREATE: текстовый пост (запоминаем ответ как createPost)
+### CREATE: текстовый пост (id сохраняем как postId)
 # @name createPost
 POST {{host}}/posts/text
 Content-Type: application/json
+X-User-Id: {{userId}}
 
 {
   "title": "Мой первый пост о TypeScript разработке",
@@ -19,75 +33,147 @@ Content-Type: application/json
   "tags": ["typescript", "nestjs"]
 }
 
-### READ: список публикаций
+> {%
+    client.global.set('postId', response.body.id);
+%}
+
+### READ: список публикаций (публично, без заголовка)
 GET {{host}}/posts
 
 ### READ: одна публикация по id (берётся из ответа createPost)
-GET {{host}}/posts/{{createPost.response.body.id}}
+GET {{host}}/posts/{{postId}}
+
+### SEARCH: поиск по отдельным словам заголовка (§8.2)
+GET {{host}}/posts/search?title=typescript prisma
+
+### FEED: лента текущего пользователя
+GET {{host}}/posts/feed
+X-User-Id: {{userId}}
+
+### DRAFTS: черновики текущего пользователя
+GET {{host}}/posts/drafts
+X-User-Id: {{userId}}
 
 ### UPDATE: обновить публикацию (по id из createPost)
-PATCH {{host}}/posts/{{createPost.response.body.id}}
+PATCH {{host}}/posts/{{postId}}
 Content-Type: application/json
+X-User-Id: {{userId}}
 
 {
   "title": "Обновлённый заголовок поста о TypeScript",
   "tags": ["typescript", "prisma"]
 }
 
-### DELETE: удалить публикацию (по id из createPost)
-DELETE {{host}}/posts/{{createPost.response.body.id}}
-
 ############################################################
 # COMMENTS — CRUD (для поста createPost)
 ############################################################
 
-### CREATE: комментарий к посту (запоминаем как createComment)
+### CREATE: комментарий к посту (id сохраняем как commentId)
 # @name createComment
-POST {{host}}/posts/{{createPost.response.body.id}}/comments
+POST {{host}}/posts/{{postId}}/comments
 Content-Type: application/json
+X-User-Id: {{userId}}
 
 {
   "text": "Отличная статья, спасибо за подробности!"
 }
 
-### READ: комментарии к посту
-GET {{host}}/posts/{{createPost.response.body.id}}/comments
+> {%
+    client.global.set('commentId', response.body.id);
+%}
+
+### READ: комментарии к посту (публично)
+GET {{host}}/posts/{{postId}}/comments
 
 ### DELETE: удалить комментарий (по id из createComment)
-DELETE {{host}}/posts/{{createPost.response.body.id}}/comments/{{createComment.response.body.id}}
+DELETE {{host}}/posts/{{postId}}/comments/{{commentId}}
+X-User-Id: {{userId}}
 
 ############################################################
 # LIKES — create / delete (для поста createPost)
 ############################################################
 
 ### CREATE: поставить лайк
-POST {{host}}/posts/{{createPost.response.body.id}}/likes
+POST {{host}}/posts/{{postId}}/likes
+X-User-Id: {{otherUserId}}
 
 ### DELETE: убрать лайк
-DELETE {{host}}/posts/{{createPost.response.body.id}}/likes
+DELETE {{host}}/posts/{{postId}}/likes
+X-User-Id: {{otherUserId}}
 
 ############################################################
-# SUBSCRIPTIONS — count / create / delete
+# SUBSCRIPTIONS — list / count / create / delete
 ############################################################
 
-### READ: количество подписчиков пользователя
-GET {{host}}/subscriptions/followers/{{createPost.response.body.authorId}}/count
+### READ: подписки текущего пользователя
+GET {{host}}/subscriptions
+X-User-Id: {{userId}}
+
+### CREATE: подписаться на другого пользователя
+POST {{host}}/subscriptions/{{otherUserId}}
+X-User-Id: {{userId}}
+
+### READ: количество подписчиков пользователя (публично)
+GET {{host}}/subscriptions/followers/{{otherUserId}}/count
+
+### DELETE: отписаться
+DELETE {{host}}/subscriptions/{{otherUserId}}
+X-User-Id: {{userId}}
 
 ############################################################
-# Запасной вариант — ручная подстановка id
-# Если переменные {{createPost.response.body.$.id}} не подхватываются
-# в вашей версии клиента, раскомментируйте и подставьте id вручную:
-#
-# @postId = ВСТАВЬТЕ_ID_ПОСТА
-# @commentId = ВСТАВЬТЕ_ID_КОММЕНТАРИЯ
-#
-# GET {{host}}/posts/{{postId}}
-# POST {{host}}/posts/{{postId}}/comments
-# Content-Type: application/json
-#
-# { "text": "Комментарий с ручным id" }
-#
-# DELETE {{host}}/posts/{{postId}}/comments/{{commentId}}
-# POST {{host}}/posts/{{postId}}/likes
-# DELETE {{host}}/posts/{{postId}}/likes
+# NEGATIVE — правила доступа и валидации
+############################################################
+
+### 401: защищённый маршрут без X-User-Id
+POST {{host}}/posts/text
+Content-Type: application/json
+
+{
+  "title": "Пост без идентификатора пользователя",
+  "announce": "Краткий анонс публикации, который заинтересует читателя и расскажет о сути материала.",
+  "text": "Полный текст публикации, которого не должно появиться: запрос обязан завершиться ошибкой 401 из-за отсутствия заголовка."
+}
+
+### 403: редактирование чужой публикации
+PATCH {{host}}/posts/{{postId}}
+Content-Type: application/json
+X-User-Id: {{otherUserId}}
+
+{
+  "title": "Чужой заголовок, который не должен примениться"
+}
+
+### 409: репост собственной публикации (§2.13)
+POST {{host}}/posts/{{postId}}/repost
+X-User-Id: {{userId}}
+
+### 201: репост чужой публикации; повтор даст 409
+POST {{host}}/posts/{{postId}}/repost
+X-User-Id: {{otherUserId}}
+
+### 400: невалидные теги (пробел, цифра в начале, 2 и 11 символов)
+POST {{host}}/posts/quote
+Content-Type: application/json
+X-User-Id: {{userId}}
+
+{
+  "quoteText": "Любая достаточно продвинутая технология неотличима от магии.",
+  "quoteAuthor": "Артур Кларк",
+  "tags": ["two words", "1abc", "ab", "abcdefghijk"]
+}
+
+### 404: комментарий к несуществующей публикации (не 500)
+POST {{host}}/posts/2f4b7d3a-3c1b-4c4d-8b6a-8ef7b92f1011/comments
+Content-Type: application/json
+X-User-Id: {{userId}}
+
+{
+  "text": "Комментарий к несуществующему посту"
+}
+
+### DELETE: удалить публикацию (выполнять последним — дальше id больше не нужен)
+DELETE {{host}}/posts/{{postId}}
+X-User-Id: {{userId}}
+
+### Swagger UI: http://localhost:3002/spec
 ############################################################
