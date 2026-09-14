@@ -57,6 +57,7 @@ HTML Academy "Readme" course: NestJS 11 + Nx 22 monorepo, ESM (`"type": "module"
 - `datasource db` has **no `url`** (forbidden in Prisma 7). CLI config lives in `apps/<app>/prisma.config.ts`, which loads `apps/<app>/.env` via `dotenv`.
 - Runtime needs `@prisma/adapter-pg`. `PrismaService extends PrismaClient`, constructs `new PrismaPg({ connectionString })`. `PrismaModule` is global and exports `PrismaService`.
 - Schema files: `apps/<app>/prisma/schema.prisma` only — no per-feature schema files. Repositories map Prisma records to shared domain classes.
+- **`db-migrate` does NOT generate the client** under Prisma 7 + `prisma.config.ts` (verified on a clean clone). After a fresh checkout run `npx nx db-generate <app>` for all four Prisma apps, otherwise `nx build` fails with `Can't resolve '../../generated/prisma/client'`.
 
 ### Users
 - Table `public.users`; id `String @id @default(uuid()) @db.Uuid`; email unique; password only as `password_hash`.

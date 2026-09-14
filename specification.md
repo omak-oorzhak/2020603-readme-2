@@ -342,6 +342,17 @@ docker compose -f apps/file-storage/compose.yaml up -d
 
 ## Шаг 3. Схемы баз данных и демо-данные
 
+Сначала генерируются клиенты Prisma. Шаг обязателен: сгенерированный код не хранится в репозитории, а команда миграции его не создаёт. Без него сборка падает с ошибкой `Can't resolve '../../generated/prisma/client'`. База данных на этом шаге не нужна.
+
+```bash
+npx nx db-generate users
+npx nx db-generate blog
+npx nx db-generate notify
+npx nx db-generate file-storage
+```
+
+Затем применяются миграции:
+
 ```bash
 npx nx db-migrate users --name init
 npx nx db-migrate blog --name init

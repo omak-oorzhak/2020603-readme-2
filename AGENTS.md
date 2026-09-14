@@ -36,7 +36,7 @@ HTML Academy "Readme" course project: NestJS 11 + Nx 22 monorepo, ESM, `"type": 
 - `npx nx lint file-storage`, `npx nx build file-storage`, and `npx nx test file-storage` are clean. `file-storage`'s `webpack.config.js` also sets `useTsconfigPaths: true` for `@project/*` resolution.
 - `npx nx lint api-gateway`, `npx nx build api-gateway`, and `npx nx test api-gateway` are clean. `api-gateway`'s `webpack.config.js` also sets `useTsconfigPaths: true` for `@project/*` resolution. `api-gateway` has no Prisma targets (no DB).
 - `npx nx typecheck <app>` is still a known problem: inferred Nx target runs `tsc --build --emitDeclarationOnly`, while workspace aliases map `@project/*` to lib source without TS project references. Use `nx build` and `nx test` as verification until a project-references migration is done.
-- `users`, `blog`, `notify`, and `file-storage` use Prisma DB targets. `db-validate` and `db-generate` do not need a running DB. `db-migrate`, `db-reset`, and `db-fill` need Postgres up. `file-storage` has no `db-fill` (no seed). `api-gateway` has no Prisma targets.
+- `users`, `blog`, `notify`, and `file-storage` use Prisma DB targets. `db-validate` and `db-generate` do not need a running DB. `db-migrate`, `db-reset`, and `db-fill` need Postgres up. `db-migrate` does **not** imply `db-generate` — see the Prisma Stack section. `file-storage` has no `db-fill` (no seed). `api-gateway` has no Prisma targets.
 
 ## Apps
 - `users`: Prisma + PostgreSQL service. Implements registration, login, JWT access/refresh tokens, password change, Prisma-backed user repository, UUID primary keys, bcrypt password hashes. Publishes `add.subscriber` to notify's RabbitMQ queue on registration via its own `notify-client/` feature, so every registered user receives the newsletter (§7.2). Requires `RABBITMQ_*` in `apps/users/.env`.
@@ -74,6 +74,7 @@ HTML Academy "Readme" course project: NestJS 11 + Nx 22 monorepo, ESM, `"type": 
 - Generator is `prisma-client`, not `prisma-client-js`.
 - Generator output is required and points to `apps/<app>/src/generated/prisma`.
 - Generated Prisma clients are git-ignored and eslint-ignored.
+- **`db-migrate` does not generate the client.** Under Prisma 7 with `prisma.config.ts`, `prisma migrate dev` applies the migrations but leaves `apps/<app>/src/generated/prisma` untouched — verified by deploying a clean clone of the repository. On a fresh checkout run `npx nx db-generate <app>` for all four Prisma apps **before** building or serving, otherwise the build fails with `Module not found: Error: Can't resolve '../../generated/prisma/client'`. The root `specification.md` documents this as its own step ahead of the migrations.
 - Prisma `datasource db` has no `url`; Prisma 7 forbids it in schema.
 - CLI connection config lives in `apps/<app>/prisma.config.ts`.
 - `prisma.config.ts` explicitly loads `apps/<app>/.env` with `dotenv`.
