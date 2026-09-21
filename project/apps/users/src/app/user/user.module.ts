@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { UserRepository } from './user.repository';
+import { UserService } from './user.service';
 
 /**
- * Модуль данных пользователя: HTTP-маршруты живут в AuthenticationModule,
- * наружу отдаём только репозиторий.
+ * Модуль пользователей. Наружу отдаётся только сервис: другие модули
+ * не обращаются к репозиторию напрямую.
  */
 @Module({
-  providers: [UserRepository],
-  exports: [UserRepository],
+  providers: [UserService, UserRepository],
+  exports: [UserService],
 })
 export class UserModule {}

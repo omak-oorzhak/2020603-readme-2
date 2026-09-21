@@ -2,7 +2,7 @@ import { Controller } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import { RabbitRouting } from '@project/shared-types';
 import { EmailSubscriberService } from './email-subscriber.service';
-import { CreateSubscriberDto } from './dto/create-subscriber.dto';
+import { UserRegisteredDto } from './dto/user-registered.dto';
 
 @Controller()
 export class EmailSubscriberController {
@@ -10,9 +10,10 @@ export class EmailSubscriberController {
     private readonly emailSubscriberService: EmailSubscriberService,
   ) {}
 
-  @EventPattern(RabbitRouting.AddSubscriber)
-  public async addSubscriber(
-    @Payload() dto: CreateSubscriberDto,
+  /** Новый пользователь users становится подписчиком рассылки. */
+  @EventPattern(RabbitRouting.UserRegistered)
+  public async handleUserRegistered(
+    @Payload() dto: UserRegisteredDto,
   ): Promise<void> {
     await this.emailSubscriberService.addSubscriber(dto);
   }

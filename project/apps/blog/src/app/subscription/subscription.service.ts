@@ -15,6 +15,14 @@ export class SubscriptionService {
     return this.subscriptionRepository.findByFollower(followerId);
   }
 
+  /** Идентификаторы авторов, на которых подписан пользователь (§4.2). */
+  public async findFollowingIds(followerId: string): Promise<string[]> {
+    const subscriptions = await this.subscriptionRepository.findByFollower(
+      followerId,
+    );
+    return subscriptions.map((subscription) => subscription.followingId);
+  }
+
   public async countFollowers(followingId: string): Promise<number> {
     return this.subscriptionRepository.countByFollowing(followingId);
   }

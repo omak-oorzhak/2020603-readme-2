@@ -8,6 +8,6 @@ import { PostModule } from '../post/post.module';
   imports: [PostModule], // CommentService проверяет публикацию через PostService
   controllers: [CommentController],
   providers: [CommentService, CommentRepository],
-  exports: [CommentService, CommentRepository],
+  exports: [CommentService],
 })
 export class CommentModule {}

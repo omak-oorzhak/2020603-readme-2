@@ -4,29 +4,28 @@ import { JwtService } from '@nestjs/jwt';
 import { User } from '@project/shared-types';
 import { AuthenticationService } from './authentication.service';
 import { PasswordHasher } from './password.hasher';
-import { UserRepository } from '../user/user.repository';
+import { UserService } from '../user/user.service';
+import { UserAlreadyExistsError } from '../user/user.errors';
 import { NotifyClientService } from '../notify-client/notify-client.service';
 import { jwtConfig } from '../config';
-import {
-  InvalidRefreshTokenError,
-  UserAlreadyExistsError,
-} from './authentication.errors';
+import { InvalidRefreshTokenError } from './authentication.errors';
 
 describe('AuthenticationService', () => {
   let service: AuthenticationService;
   let jwtService: Pick<JwtService, 'signAsync' | 'verifyAsync'>;
-  let userRepositoryMock: Partial<UserRepository>;
-  let notifyClientMock: Pick<NotifyClientService, 'publishNewSubscriber'>;
+  let userServiceMock: jest.Mocked<
+    Pick<UserService, 'getById' | 'findByEmail' | 'create' | 'updatePasswordHash'>
+  >;
+  let notifyClientMock: Pick<NotifyClientService, 'publishUserRegistered'>;
 
   beforeEach(async () => {
-    userRepositoryMock = {
-      findById: jest.fn(),
+    userServiceMock = {
+      getById: jest.fn(),
       findByEmail: jest.fn(),
       create: jest.fn(),
       updatePasswordHash: jest.fn(),
-      deleteById: jest.fn(),
     };
-    notifyClientMock = { publishNewSubscriber: jest.fn() };
+    notifyClientMock = { publishUserRegistered: jest.fn() };
     jwtService = {
       signAsync: jest
         .fn()
@@ -39,7 +38,7 @@ describe('AuthenticationService', () => {
       providers: [
         AuthenticationService,
         PasswordHasher,
-        { provide: UserRepository, useValue: userRepositoryMock },
+        { provide: UserService, useValue: userServiceMock },
         { provide: NotifyClientService, useValue: notifyClientMock },
         { provide: JwtService, useValue: jwtService },
         {
@@ -91,14 +90,13 @@ describe('AuthenticationService', () => {
     );
   });
 
-  it('should publish add.subscriber event after registration', async () => {
+  it('should publish user.registered event after registration', async () => {
     const created = Object.assign(new User(), {
       id: '2f4b7d3a-3c1b-4c4d-8b6a-8ef7b92f1011',
       email: 'new@example.com',
       name: 'Новый Пользователь',
     });
-    (userRepositoryMock.findByEmail as jest.Mock).mockResolvedValue(null);
-    (userRepositoryMock.create as jest.Mock).mockResolvedValue(created);
+    userServiceMock.create.mockResolvedValue(created);
 
     await expect(
       service.register({
@@ -108,12 +106,18 @@ describe('AuthenticationService', () => {
       }),
     ).resolves.toBe(created);
 
-    expect(notifyClientMock.publishNewSubscriber).toHaveBeenCalledWith(created);
+    expect(userServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'new@example.com',
+        passwordHash: expect.not.stringContaining('secret123'),
+      }),
+    );
+    expect(notifyClientMock.publishUserRegistered).toHaveBeenCalledWith(created);
   });
 
-  it('should not register a duplicate email', async () => {
-    (userRepositoryMock.findByEmail as jest.Mock).mockResolvedValue(
-      new User(),
+  it('should not publish an event when the email is taken', async () => {
+    userServiceMock.create.mockRejectedValue(
+      new UserAlreadyExistsError('taken@example.com'),
     );
 
     await expect(
@@ -124,8 +128,7 @@ describe('AuthenticationService', () => {
       }),
     ).rejects.toBeInstanceOf(UserAlreadyExistsError);
 
-    expect(userRepositoryMock.create).not.toHaveBeenCalled();
-    expect(notifyClientMock.publishNewSubscriber).not.toHaveBeenCalled();
+    expect(notifyClientMock.publishUserRegistered).not.toHaveBeenCalled();
   });
 
   describe('verifyRefreshToken', () => {
@@ -140,7 +143,7 @@ describe('AuthenticationService', () => {
         email: user.email,
         name: user.name,
       });
-      (userRepositoryMock.findById as jest.Mock).mockResolvedValue(user);
+      userServiceMock.getById.mockResolvedValue(user);
 
       await expect(service.verifyRefreshToken('refresh.token')).resolves.toBe(
         user,
@@ -158,7 +161,7 @@ describe('AuthenticationService', () => {
       await expect(
         service.verifyRefreshToken('stale.token'),
       ).rejects.toBeInstanceOf(InvalidRefreshTokenError);
-      expect(userRepositoryMock.findById).not.toHaveBeenCalled();
+      expect(userServiceMock.getById).not.toHaveBeenCalled();
     });
   });
 });

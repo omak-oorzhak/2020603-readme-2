@@ -13,6 +13,10 @@ type CommentRecord = {
   createdAt: Date;
 };
 
+// Мягкое удаление: удалённые комментарии остаются в таблице (на них в будущем
+// могут ссылаться ответы), поэтому каждое чтение исключает их явно.
+const NOT_DELETED = { deletedAt: null };
+
 @Injectable()
 export class CommentRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -33,10 +37,11 @@ export class CommentRepository {
   ): Promise<PaginationResult<Comment>> {
     const { limit = DEFAULT_LIMIT, page = 1 } = query;
 
+    const where = { postId, ...NOT_DELETED };
     const [totalItems, records] = await this.prisma.$transaction([
-      this.prisma.comment.count({ where: { postId } }),
+      this.prisma.comment.count({ where }),
       this.prisma.comment.findMany({
-        where: { postId },
+        where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -53,7 +58,9 @@ export class CommentRepository {
   }
 
   public async findById(id: string): Promise<Comment | null> {
-    const record = await this.prisma.comment.findUnique({ where: { id } });
+    const record = await this.prisma.comment.findFirst({
+      where: { id, ...NOT_DELETED },
+    });
     return record ? this.toDomain(record) : null;
   }
 
@@ -68,11 +75,11 @@ export class CommentRepository {
     return this.toDomain(record);
   }
 
-  public async deleteById(id: string): Promise<void> {
-    await this.prisma.comment.delete({ where: { id } });
-  }
-
-  public async deleteByPostId(postId: string): Promise<void> {
-    await this.prisma.comment.deleteMany({ where: { postId } });
+  /** Мягкое удаление: комментарий помечается удалённым и пропадает из выборок. */
+  public async softDeleteById(id: string): Promise<void> {
+    await this.prisma.comment.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

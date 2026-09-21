@@ -40,9 +40,14 @@ type PostWithRelations = {
 type PostWhere = Record<string, unknown>;
 type PostOrderBy = Record<string, unknown>;
 
+// Мягкое удаление: удалённые посты и комментарии остаются в таблицах,
+// поэтому каждое чтение явно исключает строки с заполненным deletedAt.
+const NOT_DELETED = { deletedAt: null };
+
 const POST_INCLUDE = {
   tags: { select: { title: true } },
-  _count: { select: { likes: true, comments: true } },
+  // commentsCount считает только живые комментарии.
+  _count: { select: { likes: true, comments: { where: NOT_DELETED } } },
 } as const;
 
 @Injectable()
@@ -121,10 +126,6 @@ export class PostRepository {
       return { likes: { _count: 'desc' } };
     }
 
-    if (sortBy === 'comments') {
-      return { comments: { _count: 'desc' } };
-    }
-
     return { publishedAt: 'desc' };
   }
 
@@ -136,7 +137,7 @@ export class PostRepository {
       authorIds?: string[];
     },
   ): PostWhere {
-    const where: PostWhere = { status: options.status };
+    const where: PostWhere = { status: options.status, ...NOT_DELETED };
 
     if (query.type) {
       where.type = query.type;
@@ -164,6 +165,10 @@ export class PostRepository {
     where: PostWhere,
     query: PostQuery,
   ): Promise<PaginationResult<Post>> {
+    if (query.sortBy === 'comments') {
+      return this.findPageByCommentsCount(where, query);
+    }
+
     const limit = query.limit ?? DEFAULT_LIMIT;
     const page = query.page ?? 1;
 
@@ -189,9 +194,80 @@ export class PostRepository {
     };
   }
 
+  /**
+   * Сортировка «Обсуждаемые» (§3.6) с учётом мягкого удаления. Prisma не умеет
+   * сортировать по отфильтрованному счётчику связи: `orderBy` по `_count` не
+   * принимает `where`, и удалённые комментарии продолжали бы поднимать пост.
+   * Поэтому страница собирается в две фазы:
+   *   1) посты хотя бы с одним живым комментарием — группировкой комментариев
+   *      по убыванию их числа;
+   *   2) хвост из постов без живых комментариев — по дате публикации.
+   * Фильтры (статус, тип, тег, автор) переиспользуются из `buildWhere`.
+   */
+  private async findPageByCommentsCount(
+    where: PostWhere,
+    query: PostQuery,
+  ): Promise<PaginationResult<Post>> {
+    const limit = query.limit ?? DEFAULT_LIMIT;
+    const page = query.page ?? 1;
+    const offset = (page - 1) * limit;
+
+    const [totalItems, commentedCount] = await this.prisma.$transaction([
+      this.prisma.post.count({ where }),
+      this.prisma.post.count({
+        where: { ...where, comments: { some: NOT_DELETED } },
+      }),
+    ]);
+
+    const ids: string[] = [];
+
+    if (offset < commentedCount) {
+      const groups = await this.prisma.comment.groupBy({
+        by: ['postId'],
+        where: { ...NOT_DELETED, post: { is: where } },
+        orderBy: [{ _count: { postId: 'desc' } }, { postId: 'asc' }],
+        skip: offset,
+        take: limit,
+      });
+      ids.push(...groups.map((group) => group.postId));
+    }
+
+    const remaining = limit - ids.length;
+    if (remaining > 0) {
+      const tail = await this.prisma.post.findMany({
+        where: { ...where, comments: { none: NOT_DELETED } },
+        orderBy: { publishedAt: 'desc' },
+        skip: Math.max(0, offset - commentedCount),
+        take: remaining,
+        select: { id: true },
+      });
+      ids.push(...tail.map((post) => post.id));
+    }
+
+    const records = ids.length
+      ? await this.prisma.post.findMany({
+          where: { id: { in: ids } },
+          include: POST_INCLUDE,
+        })
+      : [];
+    const recordsById = new Map(records.map((record) => [record.id, record]));
+    const entities = ids.flatMap((id) => {
+      const record = recordsById.get(id);
+      return record ? [this.toDomain(record as PostWithRelations)] : [];
+    });
+
+    return {
+      entities,
+      totalPages: Math.ceil(totalItems / limit),
+      totalItems,
+      currentPage: page,
+      itemsPerPage: limit,
+    };
+  }
+
   public async findById(id: string): Promise<Post | null> {
-    const record = await this.prisma.post.findUnique({
-      where: { id },
+    const record = await this.prisma.post.findFirst({
+      where: { id, ...NOT_DELETED },
       include: POST_INCLUDE,
     });
     return record ? this.toDomain(record as PostWithRelations) : null;
@@ -204,21 +280,11 @@ export class PostRepository {
     );
   }
 
-  public async findFeed(
-    userId: string,
+  /** Опубликованные посты перечисленных авторов — основа ленты (§4). */
+  public async findPublishedByAuthors(
+    authorIds: string[],
     query: PostQuery,
   ): Promise<PaginationResult<Post>> {
-    const subscriptions = await this.prisma.subscription.findMany({
-      where: { followerId: userId },
-      select: { followingId: true },
-    });
-    const authorIds = [
-      ...new Set([
-        userId,
-        ...subscriptions.map((subscription) => subscription.followingId),
-      ]),
-    ];
-
     return this.findPage(
       this.buildWhere(query, { status: PostStatus.Published, authorIds }),
       query,
@@ -248,6 +314,7 @@ export class PostRepository {
     const records = await this.prisma.post.findMany({
       where: {
         status: PostStatus.Published,
+        ...NOT_DELETED,
         OR: words.map((word) => ({
           title: { contains: word, mode: 'insensitive' },
         })),
@@ -264,7 +331,7 @@ export class PostRepository {
     authorId: string,
   ): Promise<Post | null> {
     const record = await this.prisma.post.findFirst({
-      where: { isRepost: true, originalPostId, authorId },
+      where: { isRepost: true, originalPostId, authorId, ...NOT_DELETED },
       include: POST_INCLUDE,
     });
     return record ? this.toDomain(record as PostWithRelations) : null;
@@ -302,7 +369,15 @@ export class PostRepository {
     return this.toDomain(record as PostWithRelations);
   }
 
-  public async deleteById(id: string): Promise<void> {
-    await this.prisma.post.delete({ where: { id } });
+  /**
+   * Мягкое удаление: пост помечается удалённым и пропадает из всех выборок.
+   * Его комментарии отдельно не помечаются — они недоступны вместе с постом
+   * (§2.3), потому что любые обращения к ним идут через проверку поста.
+   */
+  public async softDeleteById(id: string): Promise<void> {
+    await this.prisma.post.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

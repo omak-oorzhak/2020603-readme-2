@@ -16,7 +16,7 @@ const COMMENT_ID = '3a5c7e9d-2b1a-4f3e-8c7d-6b5a4c3d2e1f';
 describe('CommentService', () => {
   let service: CommentService;
   let repository: jest.Mocked<
-    Pick<CommentRepository, 'findById' | 'findByPostId' | 'save' | 'deleteById'>
+    Pick<CommentRepository, 'findById' | 'findByPostId' | 'save' | 'softDeleteById'>
   >;
   let postService: jest.Mocked<Pick<PostService, 'findPublishedPost'>>;
 
@@ -25,7 +25,7 @@ describe('CommentService', () => {
       findById: jest.fn(),
       findByPostId: jest.fn(),
       save: jest.fn(),
-      deleteById: jest.fn(),
+      softDeleteById: jest.fn(),
     } as unknown as jest.Mocked<typeof repository>;
     postService = { findPublishedPost: jest.fn() } as unknown as jest.Mocked<
       typeof postService
@@ -79,7 +79,7 @@ describe('CommentService', () => {
     await expect(
       service.deleteComment(COMMENT_ID, OTHER_USER_ID),
     ).rejects.toBeInstanceOf(CommentDeleteForbiddenError);
-    expect(repository.deleteById).not.toHaveBeenCalled();
+    expect(repository.softDeleteById).not.toHaveBeenCalled();
   });
 
   it('reports a missing comment as not found', async () => {
@@ -104,6 +104,6 @@ describe('CommentService', () => {
     await expect(
       service.deleteComment(COMMENT_ID, AUTHOR_ID),
     ).resolves.toBeUndefined();
-    expect(repository.deleteById).toHaveBeenCalledWith(COMMENT_ID);
+    expect(repository.softDeleteById).toHaveBeenCalledWith(COMMENT_ID);
   });
 });

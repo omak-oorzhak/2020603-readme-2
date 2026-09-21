@@ -11,6 +11,7 @@ import {
 import type { PaginationResult, Post } from '@project/shared-types';
 import { PostRepository } from './post.repository';
 import { NotifyClientService } from '../notify-client/notify-client.service';
+import { SubscriptionService } from '../subscription/subscription.service';
 import type { GetPostQueryDto } from './dto/get-post-query.dto';
 import type { CreateVideoPostDto } from './dto/create-video-post.dto';
 import type { CreateTextPostDto } from './dto/create-text-post.dto';
@@ -37,6 +38,7 @@ export class PostService {
   constructor(
     private readonly postRepository: PostRepository,
     private readonly notifyClient: NotifyClientService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   public async createPost(dto: CreatePostDto, authorId: string): Promise<Post> {
@@ -55,7 +57,7 @@ export class PostService {
     post.commentsCount = 0;
 
     const saved = await this.postRepository.save(post);
-    this.notifyClient.publishNewPost(saved);
+    this.notifyClient.publishPostPublished(saved);
     return saved;
   }
 
@@ -92,11 +94,18 @@ export class PostService {
     return this.postRepository.findAll(query);
   }
 
+  /**
+   * Лента (§4.2, §4.3): публикации авторов, на которых подписан пользователь,
+   * плюс его собственные. Подписки берём через сервис их модуля, а не из
+   * чужой таблицы.
+   */
   public async findFeed(
     userId: string,
     query: GetPostQueryDto,
   ): Promise<PaginationResult<Post>> {
-    return this.postRepository.findFeed(userId, query);
+    const followingIds = await this.subscriptionService.findFollowingIds(userId);
+    const authorIds = [...new Set([userId, ...followingIds])];
+    return this.postRepository.findPublishedByAuthors(authorIds, query);
   }
 
   public async findDrafts(
@@ -117,6 +126,7 @@ export class PostService {
   ): Promise<Post> {
     const post = await this.findPost(id, authorId);
     if (post.authorId !== authorId) throw new PostEditForbiddenError();
+    const wasPublished = post.status === PostStatus.Published;
 
     // Берём только переданные поля: у скомпилированного DTO необъявленные
     // свойства существуют со значением `undefined` и затёрли бы данные поста.
@@ -128,13 +138,20 @@ export class PostService {
       tags: dto.tags ? this.normalizeTags(dto.tags) : post.tags,
     });
 
-    return this.postRepository.update(post);
+    const updated = await this.postRepository.update(post);
+    this.notifyStatusChange(updated, wasPublished);
+    return updated;
   }
 
   public async deletePost(id: string, authorId: string): Promise<void> {
     const post = await this.findPost(id, authorId);
     if (post.authorId !== authorId) throw new PostEditForbiddenError();
-    await this.postRepository.deleteById(id);
+    await this.postRepository.softDeleteById(id);
+
+    // Черновик уже снят с рассылки при переходе в этот статус.
+    if (post.status === PostStatus.Published) {
+      this.notifyClient.publishPostUnpublished(id);
+    }
   }
 
   public async repost(postId: string, authorId: string): Promise<Post> {
@@ -163,8 +180,22 @@ export class PostService {
     reposted.commentsCount = 0;
 
     const saved = await this.postRepository.save(reposted);
-    this.notifyClient.publishNewPost(saved);
+    this.notifyClient.publishPostPublished(saved);
     return saved;
+  }
+
+  /**
+   * Синхронизирует очередь рассылки notify со статусом поста после правки.
+   * Опубликованный пост отправляется заново: так notify подхватит и возврат
+   * из черновика, и новый заголовок. Повтор безопасен — notify делает upsert
+   * и не сбрасывает отметку об уже выполненной рассылке.
+   */
+  private notifyStatusChange(post: Post, wasPublished: boolean): void {
+    if (post.status === PostStatus.Published) {
+      this.notifyClient.publishPostPublished(post);
+    } else if (wasPublished) {
+      this.notifyClient.publishPostUnpublished(post.id);
+    }
   }
 
   private normalizeTags(tags: string[]): string[] {

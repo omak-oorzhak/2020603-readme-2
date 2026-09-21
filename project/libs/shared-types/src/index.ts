@@ -18,5 +18,6 @@ export type { TokenPayload } from './lib/token/token-payload.interface';
 export type { PaginationResult } from './lib/common/pagination.interface';
 export { USER_ID_HEADER } from './lib/common/user-id-header.constant.js';
 export { RabbitRouting } from './lib/notify/rabbit-routing.enum.js';
-export type { PostNotification } from './lib/notify/post-notification.interface';
-export type { SubscriberNotification } from './lib/notify/subscriber-notification.interface';
+export type { UserRegisteredEvent } from './lib/notify/user-registered-event.interface';
+export type { PostPublishedEvent } from './lib/notify/post-published-event.interface';
+export type { PostUnpublishedEvent } from './lib/notify/post-unpublished-event.interface';

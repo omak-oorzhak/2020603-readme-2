@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import type { CreatePostNotificationDto } from './dto/create-post-notification.dto';
+import type { PostPublishedDto } from './dto/post-published.dto';
 import type { NotifyPostEntity } from './notify-post.entity';
 
 @Injectable()
@@ -8,7 +8,7 @@ export class NotifyPostRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   public async upsert(
-    dto: CreatePostNotificationDto,
+    dto: PostPublishedDto,
   ): Promise<NotifyPostEntity> {
     const data = {
       postId: dto.postId,
@@ -24,6 +24,14 @@ export class NotifyPostRepository {
       update: data,
       create: data,
     });
+  }
+
+  /** Удаляет ожидающую рассылки запись; возвращает число удалённых строк. */
+  public async deletePending(postId: string): Promise<number> {
+    const result = await this.prisma.notifyPost.deleteMany({
+      where: { postId, notifiedAt: null },
+    });
+    return result.count;
   }
 
   /** Публикации, по которым рассылка ещё не выполнялась (§7.3). */

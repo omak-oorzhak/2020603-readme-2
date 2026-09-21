@@ -37,7 +37,7 @@ async function main(): Promise<void> {
     email: `demo-${Date.now()}@example.com`,
     name: 'Демо Подписчик',
   };
-  channel.sendToQueue(queue, event('add.subscriber', subscriber));
+  channel.sendToQueue(queue, event('user.registered', subscriber));
 
   const post = {
     postId: randomUUID(),
@@ -46,11 +46,11 @@ async function main(): Promise<void> {
     authorId: randomUUID(),
     publishedAt: new Date().toISOString(),
   };
-  channel.sendToQueue(queue, event('add.post', post));
+  channel.sendToQueue(queue, event('post.published', post));
 
   console.log('Published events to queue:', queue);
-  console.log('  add.subscriber:', subscriber.email);
-  console.log('  add.post:', post.postId);
+  console.log('  user.registered:', subscriber.email);
+  console.log('  post.published:', post.postId);
 
   await channel.close();
   await connection.close();

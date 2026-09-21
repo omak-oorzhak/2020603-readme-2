@@ -26,13 +26,17 @@ import { LoginUserDto } from './dto/login-user.dto';
 import { ChangeUserPasswordDto } from './dto/change-user-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LoggedUserRdo } from './rdo/logged-user.rdo';
+import { UserService } from '../user/user.service';
 import { UserIdParamDto } from '../user/dto/user-id-param.dto';
 import { UserRdo } from '../user/rdo/user.rdo';
 
 @ApiTags('authentication')
 @Controller('auth')
 export class AuthenticationController {
-  constructor(private readonly authenticationService: AuthenticationService) {}
+  constructor(
+    private readonly authenticationService: AuthenticationService,
+    private readonly userService: UserService,
+  ) {}
 
   @Post('register')
   @ApiOperation({ summary: 'Регистрация нового пользователя' })
@@ -101,7 +105,7 @@ export class AuthenticationController {
   })
   @ApiNotFoundResponse({ description: 'Пользователь не найден' })
   public async show(@Param() params: UserIdParamDto): Promise<UserRdo> {
-    const user = await this.authenticationService.getUser(params.id);
+    const user = await this.userService.getById(params.id);
     return plainToInstance(UserRdo, user, { excludeExtraneousValues: true });
   }
 

@@ -5,7 +5,7 @@ import { LikeRepository } from './like.repository';
 import { PostModule } from '../post/post.module';
 
 @Module({
-  imports: [PostModule], // LikeService использует PostRepository
+  imports: [PostModule], // LikeService проверяет публикацию через PostService
   controllers: [LikeController],
   providers: [LikeService, LikeRepository],
 })

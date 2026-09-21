@@ -52,6 +52,10 @@ model Post {
   publishedAt DateTime @default(now()) @map("published_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  // Мягкое удаление: запись остаётся в таблице и может быть восстановлена.
+  // Все чтения фильтруют deletedAt IS NULL.
+  deletedAt DateTime? @map("deleted_at")
+
   comments Comment[]
   likes    Like[]
   tags     Tag[]     @relation("PostTags")
@@ -70,6 +74,8 @@ model Comment {
   postId    String   @map("post_id") @db.Uuid
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade) // §2.3
   createdAt DateTime @default(now()) @map("created_at")
+  // Мягкое удаление: на комментарий в будущем могут ссылаться ответы.
+  deletedAt DateTime? @map("deleted_at")
 
   @@index([postId])
   @@map("comments")

@@ -59,7 +59,7 @@ export class EnvironmentVariables {
   @MinLength(1)
   public JWT_REFRESH_TOKEN_EXPIRES_IN!: string;
 
-  // RabbitMQ — продюсер события `add.subscriber` для сервиса notify.
+  // RabbitMQ — продюсер события `user.registered` для сервиса notify.
   @IsString()
   @MinLength(1)
   public RABBITMQ_HOST!: string;

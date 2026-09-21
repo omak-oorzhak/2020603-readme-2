@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { User, type TokenPayload } from '@project/shared-types';
-import { UserRepository } from '../user/user.repository';
+import { UserService } from '../user/user.service';
+import { UserNotFoundError } from '../user/user.errors';
 import { jwtConfig } from '../config';
 import { PasswordHasher } from './password.hasher';
 import { NotifyClientService } from '../notify-client/notify-client.service';
@@ -12,8 +13,6 @@ import type { ChangeUserPasswordDto } from './dto/change-user-password.dto';
 import {
   InvalidPasswordError,
   InvalidRefreshTokenError,
-  UserAlreadyExistsError,
-  UserNotFoundError,
 } from './authentication.errors';
 
 export type AuthTokens = {
@@ -24,7 +23,7 @@ export type AuthTokens = {
 @Injectable()
 export class AuthenticationService {
   constructor(
-    private readonly userRepository: UserRepository,
+    private readonly userService: UserService,
     private readonly passwordHasher: PasswordHasher,
     private readonly jwtService: JwtService,
     @Inject(jwtConfig.KEY)
@@ -33,14 +32,10 @@ export class AuthenticationService {
   ) {}
 
   public async register(dto: CreateUserDto): Promise<User> {
-    const existingUser = await this.userRepository.findByEmail(dto.email);
-    if (existingUser) {
-      throw new UserAlreadyExistsError(dto.email);
-    }
-
     const passwordHash = await this.passwordHasher.hash(dto.password);
 
-    const user = await this.userRepository.create({
+    // Уникальность email проверяет UserService.create.
+    const user = await this.userService.create({
       email: dto.email,
       name: dto.name,
       avatarUrl: dto.avatarUrl,
@@ -48,13 +43,13 @@ export class AuthenticationService {
     });
 
     // §7.2: новый пользователь сразу становится получателем рассылки.
-    this.notifyClient.publishNewSubscriber(user);
+    this.notifyClient.publishUserRegistered(user);
 
     return user;
   }
 
   public async verifyUser(dto: LoginUserDto): Promise<User> {
-    const user = await this.userRepository.findByEmail(dto.email);
+    const user = await this.userService.findByEmail(dto.email);
     if (!user) {
       throw new UserNotFoundError();
     }
@@ -103,22 +98,14 @@ export class AuthenticationService {
       throw new InvalidRefreshTokenError();
     }
 
-    return this.getUser(payload.sub);
-  }
-
-  public async getUser(id: string): Promise<User> {
-    const user = await this.userRepository.findById(id);
-    if (!user) {
-      throw new UserNotFoundError();
-    }
-    return user;
+    return this.userService.getById(payload.sub);
   }
 
   public async changePassword(
     id: string,
     dto: ChangeUserPasswordDto,
   ): Promise<User> {
-    const user = await this.getUser(id);
+    const user = await this.userService.getById(id);
 
     const isPasswordValid = await this.passwordHasher.compare(
       dto.currentPassword,
@@ -129,13 +116,6 @@ export class AuthenticationService {
     }
 
     const passwordHash = await this.passwordHasher.hash(dto.newPassword);
-    const updated = await this.userRepository.updatePasswordHash(
-      id,
-      passwordHash,
-    );
-    if (!updated) {
-      throw new UserNotFoundError();
-    }
-    return updated;
+    return this.userService.updatePasswordHash(id, passwordHash);
   }
 }

@@ -49,6 +49,6 @@ export class CommentService {
     const comment = await this.commentRepository.findById(id);
     if (!comment) throw new CommentNotFoundError(id);
     if (comment.authorId !== authorId) throw new CommentDeleteForbiddenError();
-    await this.commentRepository.deleteById(id);
+    await this.commentRepository.softDeleteById(id);
   }
 }
