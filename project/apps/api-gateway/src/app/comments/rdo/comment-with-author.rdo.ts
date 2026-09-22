@@ -24,7 +24,8 @@ export class CommentWithAuthorRdo {
   public createdAt!: Date;
 
   @ApiProperty({
-    description: 'Автор комментария (null для stub-пользователя)',
+    description:
+      'Автор комментария (null, если данные автора не удалось получить из сервиса users)',
     type: () => UserInfoRdo,
     required: false,
     nullable: true,

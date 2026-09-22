@@ -5,7 +5,8 @@ import { UserInfoRdo } from '../../common/rdo/user-info.rdo';
 
 export class PostWithAuthorRdo extends PostRdo {
   @ApiProperty({
-    description: 'Автор публикации (null для stub-пользователя)',
+    description:
+      'Автор публикации (null, если данные автора не удалось получить из сервиса users)',
     type: () => UserInfoRdo,
     required: false,
     nullable: true,

@@ -40,9 +40,9 @@ type PostWithRelations = {
 type PostWhere = Record<string, unknown>;
 type PostOrderBy = Record<string, unknown>;
 
-// Мягкое удаление: удалённые посты и комментарии остаются в таблицах,
-// поэтому каждое чтение явно исключает строки с заполненным deletedAt.
-const NOT_DELETED = { deletedAt: null };
+// Мягкое удаление: удалённые посты и комментарии остаются в таблицах
+// с флагом isDeleted, поэтому каждое чтение явно исключает помеченные строки.
+const NOT_DELETED = { isDeleted: false };
 
 const POST_INCLUDE = {
   tags: { select: { title: true } },
@@ -370,14 +370,15 @@ export class PostRepository {
   }
 
   /**
-   * Мягкое удаление: пост помечается удалённым и пропадает из всех выборок.
-   * Его комментарии отдельно не помечаются — они недоступны вместе с постом
-   * (§2.3), потому что любые обращения к ним идут через проверку поста.
+   * Мягкое удаление: пост получает флаг isDeleted и дату удаления deletedAt
+   * и пропадает из всех выборок. Его комментарии отдельно не помечаются —
+   * они недоступны вместе с постом (§2.3), потому что любые обращения к ним
+   * идут через проверку поста.
    */
   public async softDeleteById(id: string): Promise<void> {
     await this.prisma.post.update({
       where: { id },
-      data: { deletedAt: new Date() },
+      data: { isDeleted: true, deletedAt: new Date() },
     });
   }
 }

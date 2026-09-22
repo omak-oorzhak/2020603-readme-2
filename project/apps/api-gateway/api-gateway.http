@@ -9,6 +9,9 @@
 ### Значения из ответов сохраняются обработчиками `> {% client.global.set(...) %}`
 ### и доступны дальше как {{token}}, {{postId}} и т. д. Запускайте запросы
 ### сверху вниз: каждый следующий опирается на сохранённые значения.
+### Файл можно прогонять повторно на той же базе: каждый запуск регистрирует
+### новых пользователей со случайным email ($random.alphanumeric), а адрес
+### из ответа сохраняется в {{email}} / {{secondEmail}} для входа и проверки 409.
 ### Окружение `development` описано в apps/api-gateway/http-client.env.json — оно нужно,
 ### чтобы выбранное в IDE окружение существовало. Тот же {{host}} продублирован ниже
 ### как in-place переменная, и приоритет у неё: файл работает и без окружения.
@@ -27,7 +30,7 @@ Content-Type: multipart/form-data; boundary=boundary
 --boundary
 Content-Disposition: form-data; name="email"
 
-alice@example.com
+alice-{{$random.alphanumeric(8)}}@example.com
 --boundary
 Content-Disposition: form-data; name="name"
 
@@ -45,6 +48,7 @@ Content-Type: image/jpeg
 
 > {%
     client.global.set('userId', response.body.id);
+    client.global.set('email', response.body.email);
 %}
 
 ### REGISTER: второй пользователь, без аватара (JSON не поддерживается — нужен multipart)
@@ -55,7 +59,7 @@ Content-Type: multipart/form-data; boundary=boundary
 --boundary
 Content-Disposition: form-data; name="email"
 
-bob@example.com
+bob-{{$random.alphanumeric(8)}}@example.com
 --boundary
 Content-Disposition: form-data; name="name"
 
@@ -68,6 +72,7 @@ secret456
 
 > {%
     client.global.set('secondUserId', response.body.id);
+    client.global.set('secondEmail', response.body.email);
 %}
 
 ### LOGIN: вход (запоминаем токены)
@@ -76,7 +81,7 @@ POST {{host}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "alice@example.com",
+  "email": "{{email}}",
   "password": "secret123"
 }
 
@@ -91,7 +96,7 @@ POST {{host}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "bob@example.com",
+  "email": "{{secondEmail}}",
   "password": "secret456"
 }
 
@@ -116,14 +121,14 @@ Content-Type: application/json
   "newPassword": "new12345"
 }
 
-### 409: повторная регистрация того же email
+### 409: повторная регистрация того же email (адрес из первой регистрации)
 POST {{host}}/auth/register
 Content-Type: multipart/form-data; boundary=boundary
 
 --boundary
 Content-Disposition: form-data; name="email"
 
-alice@example.com
+{{email}}
 --boundary
 Content-Disposition: form-data; name="name"
 
@@ -337,7 +342,7 @@ Content-Type: multipart/form-data; boundary=boundary
 --boundary
 Content-Disposition: form-data; name="email"
 
-carol@example.com
+carol-{{$random.alphanumeric(8)}}@example.com
 --boundary
 Content-Disposition: form-data; name="name"
 

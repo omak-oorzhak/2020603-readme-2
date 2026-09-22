@@ -13,9 +13,10 @@ type CommentRecord = {
   createdAt: Date;
 };
 
-// Мягкое удаление: удалённые комментарии остаются в таблице (на них в будущем
-// могут ссылаться ответы), поэтому каждое чтение исключает их явно.
-const NOT_DELETED = { deletedAt: null };
+// Мягкое удаление: удалённые комментарии остаются в таблице с флагом isDeleted
+// (на них в будущем могут ссылаться ответы), поэтому каждое чтение исключает
+// их явно.
+const NOT_DELETED = { isDeleted: false };
 
 @Injectable()
 export class CommentRepository {
@@ -75,11 +76,14 @@ export class CommentRepository {
     return this.toDomain(record);
   }
 
-  /** Мягкое удаление: комментарий помечается удалённым и пропадает из выборок. */
+  /**
+   * Мягкое удаление: комментарий получает флаг isDeleted и дату удаления
+   * deletedAt и пропадает из выборок.
+   */
   public async softDeleteById(id: string): Promise<void> {
     await this.prisma.comment.update({
       where: { id },
-      data: { deletedAt: new Date() },
+      data: { isDeleted: true, deletedAt: new Date() },
     });
   }
 }

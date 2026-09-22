@@ -53,7 +53,10 @@ model Post {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Мягкое удаление: запись остаётся в таблице и может быть восстановлена.
-  // Все чтения фильтруют deletedAt IS NULL.
+  // Признак удаления — флаг isDeleted, по нему фильтруются все чтения.
+  // deletedAt хранит момент удаления; при восстановлении сбрасывается
+  // только флаг, дата остаётся.
+  isDeleted Boolean   @default(false) @map("is_deleted")
   deletedAt DateTime? @map("deleted_at")
 
   comments Comment[]
@@ -68,13 +71,15 @@ model Post {
 }
 
 model Comment {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
   text      String
-  authorId  String   @map("author_id")
-  postId    String   @map("post_id") @db.Uuid
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade) // §2.3
-  createdAt DateTime @default(now()) @map("created_at")
+  authorId  String    @map("author_id")
+  postId    String    @map("post_id") @db.Uuid
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade) // §2.3
+  createdAt DateTime  @default(now()) @map("created_at")
   // Мягкое удаление: на комментарий в будущем могут ссылаться ответы.
+  // Флаг — признак удаления, дата — момент удаления (как у Post).
+  isDeleted Boolean   @default(false) @map("is_deleted")
   deletedAt DateTime? @map("deleted_at")
 
   @@index([postId])

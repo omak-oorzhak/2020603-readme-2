@@ -11,7 +11,9 @@ export class SubscriptionWithUserRdo {
   @Expose()
   public followerId!: string;
 
-  @ApiProperty({ description: 'Идентификатор пользователя, на которого подписались' })
+  @ApiProperty({
+    description: 'Идентификатор пользователя, на которого подписались',
+  })
   @Expose()
   public followingId!: string;
 
@@ -20,7 +22,8 @@ export class SubscriptionWithUserRdo {
   public createdAt!: Date;
 
   @ApiProperty({
-    description: 'Карточка пользователя, на которого подписаны (null для stub-пользователя)',
+    description:
+      'Карточка пользователя, на которого подписаны (null, если его данные не удалось получить из сервиса users)',
     type: () => UserInfoRdo,
     required: false,
     nullable: true,
