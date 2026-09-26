@@ -384,10 +384,20 @@ npx nx serve api-gateway
 
 ## Проверка вручную
 
-Готовые наборы запросов для REST Client (WebStorm, VS Code):
+Готовые наборы запросов написаны для IntelliJ HTTP Client — встроенного HTTP-клиента WebStorm и IntelliJ IDEA. Расширение REST Client для VS Code их не поддерживает: оно не выполняет обработчики `> {% ... %}`, которые передают токены и идентификаторы от запроса к запросу, и не знает переменных `$random.*`.
 
-- `apps/api-gateway/api-gateway.http` — сквозной сценарий через точку входа: регистрация с аватаром, вход, публикации всех видов, комментарии, лайки, подписки, рассылка и негативные проверки правил доступа.
+- `apps/api-gateway/api-gateway.http` — сквозной сценарий через точку входа: регистрация с аватаром, вход, публикации всех видов, комментарии, лайки, подписки, рассылка и негативные проверки правил доступа. Сценарий можно прогонять повторно на той же базе: каждый запуск регистрирует новых пользователей.
 - `apps/blog/blog.http`, `apps/file-storage/file-storage.http`, `apps/notify/notify.http` — прямые запросы к отдельным сервисам.
+
+В WebStorm откройте файл, выберите окружение `development` и нажмите «Run All Requests in File». Запросы выполняются сверху вниз, каждый следующий использует значения, сохранённые предыдущими.
+
+Без WebStorm те же файлы запускает консольная версия клиента из Docker-образа `jetbrains/intellij-http-client`. Сервисы должны быть запущены, команда выполняется из `project/` и прогоняет все четыре файла:
+
+```bash
+for app in api-gateway blog file-storage notify; do docker run --rm -v "$PWD:/workdir" jetbrains/intellij-http-client -D --no-progress -e development -v "/workdir/apps/$app/http-client.env.json" "/workdir/apps/$app/$app.http"; done
+```
+
+Флаг `-D` заменяет `localhost` на `host.docker.internal`, чтобы контейнер достучался до сервисов на компьютере. В Docker Engine на Linux этого имени по умолчанию нет — добавьте к `docker run` параметр `--add-host=host.docker.internal:host-gateway`. По каждому файлу клиент печатает итог: число выполненных запросов и `RUN SUCCESSFUL`. Статусы ответов покажет параметр `-L HEADERS`.
 
 Письма рассылки приходят в Mailpit: запустите `POST http://localhost:3005/api/newsletters` с токеном и откройте http://localhost:8025.
 
